@@ -23,13 +23,19 @@ async function fetchStockfishAPI(fen, fromWhere) {
         fen: fen,
         type: fromWhere,
         depth: config.compute_depth,
-        movetime: null
+        movetime: null,
+        bookmoves: bookmoves,
+        maximum_book_move,
+        play_elo
     } : 
     {
         fen: fen,
         type: fromWhere,
         depth: null,
-        movetime: config.compute_time
+        movetime: config.compute_time,
+        bookmoves: config.bookmoves,
+        maximum_book_move: config.maximum_book_move,
+        play_elo: config.play_elo
     };
     const response = await fetch(url, {
         method: 'POST',
@@ -56,7 +62,9 @@ document.addEventListener('DOMContentLoaded', function () {
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         compute_depth: JSON.parse(localStorage.getItem('compute_depth')) || 16,
         depth_or_time: JSON.parse(localStorage.getItem('depth_or_time')) || false,
-        
+        maximum_book_move: JSON.parse(localStorage.getItem('maximum_book_move')) || false,
+        bookmoves: JSON.parse(localStorage.getItem('bookmoves')) || 8,
+        play_elo: JSON.parse(localStorage.getItem('play_elo')) || 1200,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
