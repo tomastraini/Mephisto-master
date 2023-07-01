@@ -18,16 +18,22 @@ def get_move_count_from_fen(fen):
     return board.fullmove_number
 
 def get_book_move(fen, play_elo):
-    api_response = requests.get(f'https://explorer.lichess.ovh/masters',
-    params={'fen': fen, 'topGames': 0, 'recentGames': 0, 'ratings': play_elo})
+    if fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - - 0 1":
+        fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    api_response = requests.get(f'https://explorer.lichess.ovh/lichess',
+                               params={'fen': fen, 'topGames': 0, 'recentGames': 0, 'ratings': play_elo})
 
     if api_response.status_code == 200:
         api_data = api_response.json()
         moves = api_data.get('moves', [])
-
-        if moves:
-            random_move = random.choice(moves)['uci']
-            return random_move
+        if len(moves) >= 2:
+            best_moves = sorted(moves[:2], key=lambda move: move.get('averageRating', 0), reverse=True)
+            print(best_moves)
+            random_index = random.randint(0, 1)
+            selected_move = best_moves[random_index]
+            return selected_move['uci']
+        elif moves:
+            return moves[0]['uci']
 
     return None
 
@@ -37,7 +43,6 @@ def handle_stockfish():
     global stockfish_process
 
     data = request.get_json()
-    print(data)
     fen = data['fen']
     response_type = data.get('type', '')
     maximum_book_move = data['maximum_book_move']
@@ -50,15 +55,13 @@ def handle_stockfish():
         book_move = get_book_move(fen, play_elo)
 
         if book_move is not None:
-            response = f'bestmove {book_move} ponder h2h1'
+            response = f'bestmove {book_move} ponder h1h2'
             return jsonify({'response': response})
 
     movetime = data['movetime']
-    depth = data.get('depth')
-
+    depth = data['depth']
     # Determine the analysis parameter based on the availability of 'depth' or 'movetime'
     analysis_parameter = f'depth {depth}' if depth else f'movetime {movetime}'
-
     stockfish_process.stdin.write(f'position fen {fen}\n')
     stockfish_process.stdin.write(f'go {analysis_parameter}\n')
     stockfish_process.stdin.flush()
