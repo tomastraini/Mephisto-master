@@ -7,7 +7,9 @@ import random
 
 app = Flask(__name__)
 CORS(app)
-stockfish_process = subprocess.Popen(['stockfish'],
+
+stockfish_process = subprocess.Popen(['./engines/stockfish 16.exe'],
+                                     cwd='./engines',
                                      universal_newlines=True,
                                      stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE,
@@ -20,7 +22,7 @@ def get_move_count_from_fen(fen):
 def get_book_move(fen, play_elo):
     if fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - - 0 1":
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    api_response = requests.get(f'https://explorer.lichess.ovh/lichess',
+    api_response = requests.get(f'https://explorer.lichess.ovh/masters',
                                params={'fen': fen, 'topGames': 0, 'recentGames': 0, 'ratings': play_elo})
 
     if api_response.status_code == 200:
