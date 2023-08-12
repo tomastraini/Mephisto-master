@@ -3,6 +3,9 @@
         <div id="form_container" class="big-section">
             <div id="engine" class="scrollspy">
                 <h3 class="header">Engine</h3>
+		<div class="section">
+                	<button id="apply_btn1" class="waves-effect waves-light btn">Apply</button>
+            	</div>
                 <div class="section">
                     <label>
                         Stockfish Compute Time (ms):
@@ -39,6 +42,49 @@
                         On
                     </label>
                 </div>
+                <div class="section switch">
+                    <label class="switch-label">Preferred responses:</label>
+                    <label>
+                        Off
+                        <input id="preferred_responses_checkbox" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+                <h3 class="header">Engine evaluation</h3>
+                <div class="section switch">
+                    <label class="switch-label">Change evaluation process:</label>
+                    <label>
+                        Off
+                        <input id="change_evaluation_checkbox" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+                <div class="section">
+                    <label for="evaluation_color_select" class="dropdown-label">Select color:</label>
+                    <select id="evaluation_color_select" class="browser-default" >
+                        <option value="" disabled selected>Choose an option</option>
+                        <option value="1">White</option>
+                        <option value="2">Black</option>
+                        <option value="3">Both</option>
+                    </select>
+                    <input type="hidden" id="evaluation_color_input">
+                </div>
+
+                <div class="section">
+                    <label for="evaluation_type_select" class="dropdown-label">
+                        Select evaluation:
+                    </label>
+                    <select id="evaluation_type_select" class="browser-default" >
+                        <option value="" disabled selected>Choose an option</option>
+                        <option value="1">Worst move</option>
+                        <option value="2">Aggressive</option>
+                        <option value="3">Human</option>
+                    </select>
+                    <input type="hidden" id="evaluation_type_input">
+                </div>
+
             </div>
             <div id="bookmoves" class="scrollspy">
                 <h3 class="header">Book moves</h3>

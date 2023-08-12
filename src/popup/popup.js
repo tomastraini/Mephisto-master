@@ -26,7 +26,12 @@ async function fetchStockfishAPI(fen, fromWhere) {
         movetime: null,
         bookmoves: config.bookmoves,
         maximum_book_move: config.maximum_book_move,
-        play_elo: config.play_elo
+        play_elo: config.play_elo,
+
+        preferred_responses: config.preferred_responses,
+        change_evaluation: config.change_evaluation,
+        evaluation_color: config.evaluation_color,
+        evaluation_type: config.evaluation_type
     } : 
     {
         fen: fen,
@@ -35,7 +40,11 @@ async function fetchStockfishAPI(fen, fromWhere) {
         movetime: config.compute_time,
         bookmoves: config.bookmoves,
         maximum_book_move: config.maximum_book_move,
-        play_elo: config.play_elo
+        play_elo: config.play_elo,
+        preferred_responses: config.preferred_responses,
+        change_evaluation: config.change_evaluation,
+        evaluation_color: config.evaluation_color,
+        evaluation_type: config.evaluation_type
     };
     const response = await fetch(url, {
         method: 'POST',
@@ -59,17 +68,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // load extension configurations from localStorage
     config = {
         // general settings
-        compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
+        compute_time: JSON.parse(localStorage.getItem('compute_time')) || 200,
         compute_depth: JSON.parse(localStorage.getItem('compute_depth')) || 16,
         depth_or_time: JSON.parse(localStorage.getItem('depth_or_time')) || false,
+        preferred_responses: JSON.parse(localStorage.getItem('preferred_responses')) || false,
+
+        change_evaluation: JSON.parse(localStorage.getItem('change_evaluation')) || false,
+        evaluation_color: JSON.parse(localStorage.getItem('evaluation_color')) || 3,
+        evaluation_type: JSON.parse(localStorage.getItem('evaluation_type')) || 2,
+
+
         maximum_book_move: JSON.parse(localStorage.getItem('maximum_book_move')) || 8,
         bookmoves: JSON.parse(localStorage.getItem('bookmoves')) || false,
         play_elo: JSON.parse(localStorage.getItem('play_elo')) || 1200,
-        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
-        think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
-        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
-        move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
-        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
+        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 20,
+        think_time: JSON.parse(localStorage.getItem('think_time')) || 20,
+        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 20,
+        move_time: JSON.parse(localStorage.getItem('move_time')) || 20,
+        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 20,
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
@@ -92,13 +108,16 @@ document.addEventListener('DOMContentLoaded', function () {
         showNotation: config.coordinates,
         draggable: false
     });
-
+    // new_pos("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
     // init fen LRU cache
     fenCache = new LRU(1000);
     var fen = fenCache.tail !== undefined && fenCache.tail !== null ? fenCache.tail : { value: "" }
+
     fetchStockfishAPI(`${fen.value}`, "bestmove")
         .then(response => {
             on_stockfish_response(response);
+            console.log(response);
+            console.log(fen.value);
             fetchStockfishAPI(`${fen.value}`, "info")
                 .then(response => {
                     on_stockfish_response(response);
@@ -111,7 +130,8 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(error => {
             console.error('Error:', error);
             // Handle error if required
-        });
+    });
+
 
     chrome.runtime.onMessage.addListener(function (response) {
         if (response.fenresponse && response.dom !== 'no') {
@@ -126,6 +146,10 @@ document.addEventListener('DOMContentLoaded', function () {
             push_config();
         } else if (response.click) {
             dispatchClickEvent(response.x, response.y);
+        }
+        else if (response.cleanfen)
+        {
+            console.log("HEYYY");
         }
     });
 
@@ -153,6 +177,7 @@ function new_pos(fen) {
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
+    console.log(fen);
     fetchStockfishAPI(`${fen}`, "bestmove")
         .then(response => {
             on_stockfish_response(response);
@@ -279,9 +304,15 @@ function makeMoveWithObject(lastMove) {
   }
 
 function on_stockfish_response(event) {
-    if (event == undefined) return;
+    
+    if (event == undefined){
+        return;
+    } 
+    if(event.play_yes == true)
+    {
+        request_automove("e2e4")    
+    }
     let message = event.response;
-    console.log('on_stockfish_response', message);
     if (message.includes('bestmove')) {
         const arr = message.split(' ');
         const best = arr[1];
@@ -341,7 +372,7 @@ function on_stockfish_response(event) {
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
-            const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
+            const score = infoArr[9] * -1;
             document.getElementById('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
             lastScore = score / 100.0;
         }

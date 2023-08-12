@@ -40,10 +40,19 @@ chrome.runtime.onMessage.addListener(response => {
             console.log(response.pv);
             simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
         } else {
-            console.log(response.move);
+            if(document.querySelector('.game-over-modal-content'))
+            {
+                const newGameButton = document.querySelector('[data-cy="sidebar-game-over-new-game-button"]');
+                console.log("newGameButton");
+                console.log(newGameButton);
+                if (newGameButton) {
+                    newGameButton.click(); // Click the button if found
+                }
+            }
             simulateMove(response.move).finally(toggleMoving);
         }
     } else if (response.pushConfig) {
+        
         console.log(response.config);
         config = response.config;
     } else if (response.consoleMessage) {
