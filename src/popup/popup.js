@@ -19,33 +19,32 @@ async function fetchStockfishAPI(fen, fromWhere) {
     if (fen == undefined || fen == "" || fen.includes("undef")) return;
     console.log(config.depth_or_time);
     var objectToSend = config.depth_or_time ?
-    {
-        fen: fen,
-        type: fromWhere,
-        depth: config.compute_depth,
-        movetime: null,
-        bookmoves: config.bookmoves,
-        maximum_book_move: config.maximum_book_move,
-        play_elo: config.play_elo,
-
-        preferred_responses: config.preferred_responses,
-        change_evaluation: config.change_evaluation,
-        evaluation_color: config.evaluation_color,
-        evaluation_type: config.evaluation_type
-    } : 
-    {
-        fen: fen,
-        type: fromWhere,
-        depth: null,
-        movetime: config.compute_time,
-        bookmoves: config.bookmoves,
-        maximum_book_move: config.maximum_book_move,
-        play_elo: config.play_elo,
-        preferred_responses: config.preferred_responses,
-        change_evaluation: config.change_evaluation,
-        evaluation_color: config.evaluation_color,
-        evaluation_type: config.evaluation_type
-    };
+        {
+            fen: fen,
+            type: fromWhere,
+            depth: config.compute_depth,
+            movetime: null,
+            bookmoves: config.bookmoves,
+            maximum_book_move: config.maximum_book_move,
+            play_elo: config.play_elo,
+            preferred_responses: config.preferred_responses,
+            change_evaluation: config.change_evaluation,
+            evaluation_color: config.evaluation_color,
+            evaluation_type: config.evaluation_type
+        } :
+        {
+            fen: fen,
+            type: fromWhere,
+            depth: null,
+            movetime: config.compute_time,
+            bookmoves: config.bookmoves,
+            maximum_book_move: config.maximum_book_move,
+            play_elo: config.play_elo,
+            preferred_responses: config.preferred_responses,
+            change_evaluation: config.change_evaluation,
+            evaluation_color: config.evaluation_color,
+            evaluation_type: config.evaluation_type
+        };
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -113,23 +112,18 @@ document.addEventListener('DOMContentLoaded', function () {
     fenCache = new LRU(1000);
     var fen = fenCache.tail !== undefined && fenCache.tail !== null ? fenCache.tail : { value: "" }
 
-    fetchStockfishAPI(`${fen.value}`, "bestmove")
-        .then(response => {
-            on_stockfish_response(response);
-            console.log(response);
-            console.log(fen.value);
-            fetchStockfishAPI(`${fen.value}`, "info")
-                .then(response => {
-                    on_stockfish_response(response);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    // Handle error if required
-                });
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            // Handle error if required
+    fetchStockfishAPI(`${fen}`, "info")
+    .then(response => {
+        on_stockfish_response(response);
+        return fetchStockfishAPI(`${fen}`, "bestmove");
+    })
+    .then(response => {
+        toggle_calculating(false);
+        on_stockfish_response(response);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toggle_calculating(false);
     });
 
 
@@ -178,22 +172,20 @@ function new_pos(fen) {
     `;
     document.getElementById('chess_line_2').innerText = '';
     console.log(fen);
-    fetchStockfishAPI(`${fen}`, "bestmove")
-        .then(response => {
-            on_stockfish_response(response);
-            fetchStockfishAPI(`${fen}`, "info")
-                .then(response => {
-                    on_stockfish_response(response);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    // Handle error if required
-                });
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            // Handle error if required
-        });
+    fetchStockfishAPI(`${fen}`, "info")
+    .then(response => {
+        on_stockfish_response(response);
+        return fetchStockfishAPI(`${fen}`, "bestmove");
+    })
+    .then(response => {
+        toggle_calculating(false);
+        on_stockfish_response(response);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toggle_calculating(false);
+    });
+
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {

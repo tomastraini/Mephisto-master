@@ -1,0 +1,1 @@
+py "C:\Users\Tomas\Documents\Games installer\Mephisto-master-main\Stockfish API for Windows\stockfishapi.py"
