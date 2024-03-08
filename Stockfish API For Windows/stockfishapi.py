@@ -48,7 +48,7 @@ def get_book_move(fen, play_elo):
     return None
 
 def get_preferred_response(fen, response_type):
-    with open('preferred_responses.json', 'r') as json_file:
+    with open('./preferred_responses.json', 'r') as json_file:
         data = json.load(json_file)
         
     for preferred_response in data:

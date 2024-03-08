@@ -11,6 +11,7 @@ let lastFen = '';
 let lastPv = '';
 let lastScore = '';
 let lastBestMove = '';
+let lastResponseMove = '';
 let turn = '';
 
 async function fetchStockfishAPI(fen, fromWhere) {
@@ -18,6 +19,8 @@ async function fetchStockfishAPI(fen, fromWhere) {
     var url = callworstmove ? 'http://127.0.0.1:5000/stockfish/worst' : 'http://127.0.0.1:5000/stockfish';
     if (fen == undefined || fen == "" || fen.includes("undef")) return;
     console.log(config.depth_or_time);
+    console.log(fen);
+    if(fen === '[object Object]') { fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' }
     var objectToSend = config.depth_or_time ?
         {
             fen: fen,
@@ -113,18 +116,18 @@ document.addEventListener('DOMContentLoaded', function () {
     var fen = fenCache.tail !== undefined && fenCache.tail !== null ? fenCache.tail : { value: "" }
 
     fetchStockfishAPI(`${fen}`, "info")
-    .then(response => {
-        on_stockfish_response(response);
-        return fetchStockfishAPI(`${fen}`, "bestmove");
-    })
-    .then(response => {
-        toggle_calculating(false);
-        on_stockfish_response(response);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        toggle_calculating(false);
-    });
+        .then(response => {
+            on_stockfish_response(response);
+            return fetchStockfishAPI(`${fen}`, "bestmove");
+        })
+        .then(response => {
+            toggle_calculating(false);
+            on_stockfish_response(response);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            toggle_calculating(false);
+        });
 
 
     chrome.runtime.onMessage.addListener(function (response) {
@@ -141,8 +144,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (response.click) {
             dispatchClickEvent(response.x, response.y);
         }
-        else if (response.cleanfen)
-        {
+        else if (response.cleanfen) {
             console.log("HEYYY");
         }
     });
@@ -173,23 +175,24 @@ function new_pos(fen) {
     document.getElementById('chess_line_2').innerText = '';
     console.log(fen);
     fetchStockfishAPI(`${fen}`, "info")
-    .then(response => {
-        on_stockfish_response(response);
-        return fetchStockfishAPI(`${fen}`, "bestmove");
-    })
-    .then(response => {
-        toggle_calculating(false);
-        on_stockfish_response(response);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        toggle_calculating(false);
-    });
+        .then(response => {
+            on_stockfish_response(response);
+            return fetchStockfishAPI(`${fen}`, "bestmove");
+        })
+        .then(response => {
+            toggle_calculating(false);
+            on_stockfish_response(response);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            toggle_calculating(false);
+        });
 
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
         draw_arrow(lastBestMove, 'blue', document.getElementById('move-arrow'));
+        draw_arrow(lastResponseMove, 'red', document.getElementById('response-arrow'));
         request_console_log(`Best Move: ${lastBestMove}`);
     } else {
         clear_arrows();
@@ -213,7 +216,7 @@ function parse_fen_from_response(txt) {
     const cacheKey = txt.replace(lastMoveRegex, "");
     const indirectHit = fenCache.get(cacheKey);
     const fenPosition = createFenFromMoves(cacheKey);
-    
+
     if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
         chess.clear(); // clear the board so we can place our pieces
         const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
@@ -229,7 +232,7 @@ function parse_fen_from_response(txt) {
             const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
             chess.load(fenPosition);
             var move = lastMove.includes('=') ?
-            makeMoveWithObject(lastMove) : lastMove;
+                makeMoveWithObject(lastMove) : lastMove;
             console.log(move);
             chess.move(move)
         } else {
@@ -251,16 +254,16 @@ function parse_fen_from_response(txt) {
 function createFenFromMoves(moves) {
     const chess = new Chess();
     const movesArray = moves.split('*****');
-  
+
     for (const move of movesArray) {
         var movef = move.includes('=') ?
             makeMoveWithObject(move) : move;
         chess.move(movef);
     }
-  
+
     return chess.fen();
-  }
-  
+}
+
 function makeMoveWithObject(lastMove) {
     const chess = new Chess();
     if (!lastMove.includes('x')) {
@@ -293,25 +296,25 @@ function makeMoveWithObject(lastMove) {
 
         return objectToSend;
     }
-  }
+}
 
 function on_stockfish_response(event) {
-    
-    if (event == undefined){
+
+    if (event == undefined) {
         return;
-    } 
-    if(event.play_yes == true)
-    {
-        request_automove("e2e4")    
+    }
+    if (event.play_yes == true) {
+        request_automove("e2e4")
     }
     let message = event.response;
     if (message.includes('bestmove')) {
         const arr = message.split(' ');
         const best = arr[1];
-        const threat = arr[3];
-        console.log("arr", arr);
+        const threat = arr[3].replace(/\n/g, "");
         const toplay = (turn === 'w') ? 'White' : 'Black';
         const next = (turn === 'w') ? 'Black' : 'White';
+        draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+        draw_arrow(threat, 'red', document.getElementById('response-arrow'));
         if (config.simon_says_mode) {
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare];
@@ -319,32 +322,26 @@ function on_stockfish_response(event) {
             if (startPieceType) {
                 document.getElementById('chess_line_1').innerText = pieceNameMap[startPieceType];
             }
+        } if (best === '(none)') {
+            document.getElementById('chess_line_1').innerText = `${next} Wins`;
+        } else if (threat && threat !== '(none)') {
+            document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
+            document.getElementById('chess_line_2').innerText = `Best response for ${next} is ${threat}`;
         } else {
-            if (best === '(none)') {
-                document.getElementById('chess_line_1').innerText = `${next} Wins`;
-            } else if (threat && threat !== '(none)') {
-                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
-                document.getElementById('chess_line_2').innerText = `Best response for ${next} is ${threat}`;
-            } else {
-                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
-                document.getElementById('chess_line_2').innerText = '';
-            }
+            document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
+            document.getElementById('chess_line_2').innerText = '';
         }
         if (toplay.toLowerCase() === board.orientation()) {
             lastBestMove = best;
+            lastResponseMove = threat;
             if (config.simon_says_mode) {
                 const startSquare = best.substring(0, 2);
-                // HERE
                 const startPiece = board.position()[startSquare].substring(1);
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
             if (config.autoplay) {
                 request_automove(best);
             }
-        }
-        if (!config.simon_says_mode) {
-            draw_arrow(best, 'blue', document.getElementById('move-arrow'));
-            draw_arrow(threat, 'red', document.getElementById('response-arrow'));
         }
         toggle_calculating(false);
     } else if (message.includes('info depth')) {
