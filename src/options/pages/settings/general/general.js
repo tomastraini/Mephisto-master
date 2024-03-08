@@ -68,7 +68,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('depth_or_time', 'Measure by depth or time:', 'checkbox', false);
         this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 20);
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
-        this.registerFormElement('preferred_responses', 'Preferred responses:', 'checkbox', false);
+        this.registerFormElement('preferred_responses', 'Preferred responses:', 'checkbox', true);
 
         this.registerFormElement('change_evaluation', 'Change evaluation process:', 'checkbox', false);
         this.registerFormElement('evaluation_color', 'Select color:', 'select', 3);

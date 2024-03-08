@@ -23,7 +23,6 @@ const colorMap = {
 }
 
 window.onload = () => {
-    console.log('Mephisto is listening!');
     site = siteMap[window.location.hostname];
     pullConfig();
 };
@@ -37,26 +36,20 @@ chrome.runtime.onMessage.addListener(response => {
     } else if (response.automove) {
         toggleMoving();
         if (config.puzzle_mode) {
-            console.log(response.pv);
             simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
         } else {
             if(document.querySelector('.game-over-modal-content'))
             {
                 const newGameButton = document.querySelector('[data-cy="sidebar-game-over-new-game-button"]');
-                console.log("newGameButton");
-                console.log(newGameButton);
                 if (newGameButton) {
-                    newGameButton.click(); // Click the button if found
+                    newGameButton.click();
                 }
             }
             simulateMove(response.move).finally(toggleMoving);
         }
     } else if (response.pushConfig) {
-        
-        console.log(response.config);
         config = response.config;
     } else if (response.consoleMessage) {
-        console.log(response.consoleMessage);
     }
 });
 
@@ -67,6 +60,7 @@ function getMoves(getAllMoves) {
         const moves = getMoveRecords();
         if (moves && moves.length) {
             prefix = '***ccfen***';
+            console.log(prefix);
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
                 if (move.lastElementChild?.classList.contains('icon-font-chess')) {
@@ -149,7 +143,6 @@ function getMoves(getAllMoves) {
             }
         }
     }
-    console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
     return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
 }
 
@@ -181,6 +174,7 @@ function pullConfig() {
 
 function getSelectedMoveRecord() {
     let selectedMove;
+    console.log("selectedMove", selectedMove);
     if (site === 'chesscom') {
         selectedMove = document.querySelector('.node.selected') // vs player + computer (new)
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
@@ -346,7 +340,6 @@ function getRandomSampledXY(bounds, range = 0.8) {
 // -------------------------------------------------------------------------------------------
 
 function dispatchSimulateClick(x, y) {
-    console.log([x, y]);
     chrome.runtime.sendMessage({
         click: true,
         x: x,
