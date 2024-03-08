@@ -29,8 +29,8 @@ window.onload = () => {
 
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
+    const res = getMoves(config ? config?.simon_says_mode ?? true : true);
     if (response.queryfen) {
-        const res = getMoves(config.simon_says_mode);
         const orient = getOrientation();
         chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
     } else if (response.automove) {
@@ -60,7 +60,6 @@ function getMoves(getAllMoves) {
         const moves = getMoveRecords();
         if (moves && moves.length) {
             prefix = '***ccfen***';
-            console.log(prefix);
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
                 if (move.lastElementChild?.classList.contains('icon-font-chess')) {
@@ -174,7 +173,6 @@ function pullConfig() {
 
 function getSelectedMoveRecord() {
     let selectedMove;
-    console.log("selectedMove", selectedMove);
     if (site === 'chesscom') {
         selectedMove = document.querySelector('.node.selected') // vs player + computer (new)
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
@@ -210,7 +208,10 @@ function getLastMoveHighlights() {
     if (site === 'chesscom') {
         let highlights = document.querySelectorAll('.highlight');
         if (highlights.length === 0) {
-            highlights = document.querySelectorAll('.move-square');
+            highlights = document.querySelectorAll('.hover-square');
+        }
+        if (highlights.length === 0) {
+            highlights = document.querySelectorAll('.node-highlight-content');
         }
         [fromSquare, toSquare] = Array.from(highlights);
         const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);

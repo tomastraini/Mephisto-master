@@ -18,6 +18,9 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 's') {
         apply_btn1.click();
     }
+    if (event.key === 'c') {
+        change_evaluation_checkbox.click();
+    }
 });
 depthOrTimeCheckbox.addEventListener("change", toggleInputs);
 
@@ -28,6 +31,7 @@ var maximum_book_move_input = document.getElementById('maximum_book_move_input')
 var play_elo_input = document.getElementById('play_elo_input');
 var apply_btn = document.getElementById('apply_btn');
 var apply_btn1 = document.getElementById('apply_btn1');
+var change_evaluation_checkbox = document.getElementById('change_evaluation_checkbox');
 checkbox.addEventListener('change', function() {
     maximum_book_move_input.disabled = !checkbox.checked;
     play_elo_input.disabled = !checkbox.checked;
