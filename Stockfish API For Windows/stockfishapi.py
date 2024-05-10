@@ -10,8 +10,9 @@ import json
 
 app = Flask(__name__)
 CORS(app)
-stockfish_path = 'C:\\Users\\Tomas\\Documents\\Games installer\\Mephisto-master-main\\Stockfish API for Linux\\stockfish.exe'
-stockfish_dir = 'C:\\Users\\Tomas\\Documents\\Games installer\\Mephisto-master-main\\Stockfish API for Linux'
+current_dir = "C:\\Users\\Tomas\\Documents\\Games installer\\Mephisto-master-main\\Stockfish API for Windows"
+stockfish_path = os.path.join(current_dir, "stockfish.exe")
+stockfish_dir = current_dir
 stockfish_path = os.path.expanduser(stockfish_path)
 stockfish_dir = os.path.expanduser(stockfish_dir)
 stockfish_process = subprocess.Popen([stockfish_path],
@@ -48,7 +49,7 @@ def get_book_move(fen, play_elo):
     return None
 
 def get_preferred_response(fen, response_type):
-    with open('./preferred_responses.json', 'r') as json_file:
+    with open(os.path.join(current_dir,'preferred_responses.json'), 'r') as json_file:
         data = json.load(json_file)
         
     for preferred_response in data:
