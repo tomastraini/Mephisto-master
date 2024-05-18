@@ -38,8 +38,7 @@ chrome.runtime.onMessage.addListener(response => {
         if (config.puzzle_mode) {
             simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
         } else {
-            if(document.querySelector('.game-over-modal-content'))
-            {
+            if (document.querySelector('.game-over-modal-content')) {
                 const newGameButton = document.querySelector('[data-cy="sidebar-game-over-new-game-button"]');
                 if (newGameButton) {
                     newGameButton.click();
@@ -58,12 +57,17 @@ function getMoves(getAllMoves) {
     let res = '';
     if (site === 'chesscom') {
         const moves = getMoveRecords();
+        console.log(moves);
         if (moves && moves.length) {
             prefix = '***ccfen***';
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                if (move.lastElementChild?.classList.contains('icon-font-chess')) {
-                    res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
+                console.log(move.lastChild);
+                console.log(move.querySelector('.offset-for-annotation-icon .icon-font-chess'));
+                console.log(move.lastChild.lastChild);
+                const iconElement = move.querySelector('.offset-for-annotation-icon .icon-font-chess');
+                if (iconElement) {
+                    res += iconElement.getAttribute('data-figurine') + move.innerText + '*****';
                 } else {
                     res += move.innerText + '*****';
                 }
@@ -174,12 +178,12 @@ function pullConfig() {
 function getSelectedMoveRecord() {
     let selectedMove;
     if (site === 'chesscom') {
-        selectedMove = document.querySelector('.node.selected') // vs player + computer (new)
+        selectedMove = document.querySelector('.node .selected') // vs player + computer (new)
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
             || document.querySelector('.move-node.selected .move-text'); // analysis
     } else if (site === 'lichess') {
         selectedMove = document.querySelector('u8t.a1t')
-            || document.querySelector('move.active');
+            || document.querySelector('move .active');
     }
     return selectedMove;
 }
@@ -205,6 +209,7 @@ function getMoveRecords() {
 
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
+    console.log(fromSquare)
     if (site === 'chesscom') {
         let highlights = document.querySelectorAll('.highlight');
         if (highlights.length === 0) {
@@ -213,11 +218,9 @@ function getLastMoveHighlights() {
         if (highlights.length === 0) {
             highlights = document.querySelectorAll('.node-highlight-content');
         }
+        console.log(highlights)
+
         [fromSquare, toSquare] = Array.from(highlights);
-        const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
-        if (!toPiece) {
-            [fromSquare, toSquare] = [toSquare, fromSquare];
-        }
     } else if (site === 'lichess') {
         [toSquare, fromSquare] = Array.from(document.querySelectorAll('.last-move'));
         const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
@@ -226,17 +229,19 @@ function getLastMoveHighlights() {
         if (!toPiece) {
             [toSquare, fromSquare] = [fromSquare, toSquare];
         }
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         [fromSquare, toSquare] = [document.querySelector('.move-from'), document.querySelector('.move-to')];
     }
-    return [fromSquare, toSquare];
+    return [toSquare, fromSquare];
 }
 
 function getTurn() {
     let turn;
     const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
+        console.log([_, toSquare])
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
+        console.log(hlPiece);
         const hlColorType = (document.querySelector('chess-board'))
             ? Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/))
             : hlPiece.style.backgroundImage.match(/(\w+)\.png/)[1];
@@ -259,6 +264,7 @@ function getRanksFiles() {
     let fileCoords, rankCoords;
     if (site === 'chesscom') {
         const coords = Array.from(document.querySelectorAll('.coordinates text'));
+        console.log(coords)
         fileCoords = coords.slice(8);
         rankCoords = coords.slice(0, 8);
         if (fileCoords.length === 0 || rankCoords.length === 0) {
@@ -268,7 +274,7 @@ function getRanksFiles() {
     } else if (site === 'lichess') {
         fileCoords = Array.from(document.querySelector('.files').children);
         rankCoords = Array.from(document.querySelector('.ranks').children);
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         fileCoords = Array.from(document.querySelector('.files').children);
         rankCoords = Array.from(document.querySelector('.ranks').children);
     }
@@ -295,7 +301,7 @@ function getPromotionSelection(promotion) {
     } else if (site === 'lichess') {
         const promotionModal = document.querySelector('#promotion-choice');
         if (promotionModal) promotions = promotionModal.children;
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         promotions = document.querySelector('.pieces').children;
     }
 
