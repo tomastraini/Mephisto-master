@@ -267,7 +267,6 @@ function makeMoveWithObject(lastMove) {
         const promotions = lastMove[0].toLowerCase();
         const color = chess.turn();
         var movementInfo = { from, to, promotion: promotions, piece, color, flags };
-        console.log(movementInfo)
         return movementInfo;
     } else {
         const [fromTo, promotion] = lastMove.split('=');

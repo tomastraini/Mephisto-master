@@ -57,17 +57,30 @@ function getMoves(getAllMoves) {
     let res = '';
     if (site === 'chesscom') {
         const moves = getMoveRecords();
-        console.log(moves);
         if (moves && moves.length) {
             prefix = '***ccfen***';
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                console.log(move.lastChild);
-                console.log(move.querySelector('.offset-for-annotation-icon .icon-font-chess'));
-                console.log(move.lastChild.lastChild);
-                const iconElement = move.querySelector('.offset-for-annotation-icon .icon-font-chess');
-                if (iconElement) {
-                    res += iconElement.getAttribute('data-figurine') + move.innerText + '*****';
+                const annotationElement = move.querySelector('.offset-for-annotation-icon');
+                if (annotationElement) {
+                    const text = annotationElement.innerText;
+                    console.log(annotationElement);
+                    if (text.includes('=')) {
+                        // Handle promotion case
+                        const [movePart, promotionPiece] = text.split('=')
+                        console.log(promotionPiece + movePart);
+                        res += promotionPiece + movePart + '=' + '*****';
+                    } else {
+                        // Regular case with icon-font-chess element
+                        const iconElement = annotationElement.querySelector('.icon-font-chess');
+                        if (iconElement) {
+                            console.log(iconElement);
+                            console.log(iconElement.getAttribute('data-figurine'));
+                            res += (iconElement.getAttribute('data-figurine') ?? '') + move.innerText + '*****';
+                        } else {
+                            res += move.innerText + '*****';
+                        }
+                    }
                 } else {
                     res += move.innerText + '*****';
                 }
@@ -75,7 +88,8 @@ function getMoves(getAllMoves) {
                     break;
                 }
             }
-        } else {
+        }
+        else {
             prefix = '***ccpuz***';
             res += getTurn() + '*****';
             for (const piece of document.querySelectorAll('.piece')) {
@@ -209,7 +223,6 @@ function getMoveRecords() {
 
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
-    console.log(fromSquare)
     if (site === 'chesscom') {
         let highlights = document.querySelectorAll('.highlight');
         if (highlights.length === 0) {
@@ -218,8 +231,6 @@ function getLastMoveHighlights() {
         if (highlights.length === 0) {
             highlights = document.querySelectorAll('.node-highlight-content');
         }
-        console.log(highlights)
-
         [fromSquare, toSquare] = Array.from(highlights);
     } else if (site === 'lichess') {
         [toSquare, fromSquare] = Array.from(document.querySelectorAll('.last-move'));
@@ -239,9 +250,7 @@ function getTurn() {
     let turn;
     const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
-        console.log([_, toSquare])
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
-        console.log(hlPiece);
         const hlColorType = (document.querySelector('chess-board'))
             ? Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/))
             : hlPiece.style.backgroundImage.match(/(\w+)\.png/)[1];
@@ -264,7 +273,6 @@ function getRanksFiles() {
     let fileCoords, rankCoords;
     if (site === 'chesscom') {
         const coords = Array.from(document.querySelectorAll('.coordinates text'));
-        console.log(coords)
         fileCoords = coords.slice(8);
         rankCoords = coords.slice(0, 8);
         if (fileCoords.length === 0 || rankCoords.length === 0) {
