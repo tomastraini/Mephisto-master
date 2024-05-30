@@ -30,6 +30,17 @@ window.onload = () => {
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
     const res = getMoves(config ? config?.simon_says_mode ?? true : true);
+    if (document.querySelector('.game-over-modal-content') && document.querySelector('.game-review-buttons-review')) {
+        const buttonsContainer = document.querySelector('.game-over-buttons-component');
+        if (buttonsContainer) {
+            const buttons = buttonsContainer.querySelectorAll('button');
+            buttons.forEach(button => {
+                if (button.querySelector('span') && button.querySelector('span').innerText === "New 5 min") {
+                    button.click();
+                }
+            });
+        }
+    }
     if (response.queryfen) {
         const orient = getOrientation();
         chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
@@ -38,15 +49,9 @@ chrome.runtime.onMessage.addListener(response => {
         if (config.puzzle_mode) {
             simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
         } else {
-            if (document.querySelector('.game-over-modal-content')) {
-                const newGameButton = document.querySelector('[data-cy="sidebar-game-over-new-game-button"]');
-                if (newGameButton) {
-                    newGameButton.click();
-                }
-            }
-            console.log(response.move);
             simulateMove(response.move).finally(toggleMoving);
         }
+
     } else if (response.pushConfig) {
         config = response.config;
     } else if (response.consoleMessage) {
@@ -70,7 +75,7 @@ function getMoves(getAllMoves) {
                         let completeMove = promotionPiece + movePart;
                         if (completeMove.includes("+")) {
                             const parts = completeMove.split("+");
-                            completeMove = parts[0] + parts[1] + "+"; 
+                            completeMove = parts[0] + parts[1] + "+";
                         }
                         res += completeMove + '=' + '*****';
                     } else {
@@ -93,7 +98,7 @@ function getMoves(getAllMoves) {
                             let completeMove = promotionPiece + movePart;
                             if (completeMove.includes("+")) {
                                 const parts = completeMove.split("+");
-                                completeMove = parts[0] + parts[1] + "+"; 
+                                completeMove = parts[0] + parts[1] + "+";
                             }
                             res += completeMove + '=' + '*****';
                         } else {

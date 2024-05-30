@@ -269,7 +269,7 @@ function makeMoveWithObject(lastMove) {
         const flags = "n";
         console.log(config.promotionPiece);
         const color = chess.turn();
-        const promotions = color === turn ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
+        const promotions = (color !== turn || (color === 'b' && turn === 'b')) ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
         console.log(color);
         console.log(turn);
         var movementInfo = { from, to, promotion: promotions, piece, color, flags };
@@ -285,7 +285,7 @@ function makeMoveWithObject(lastMove) {
 
         const piece = "p"; // Retrieve the piece type from the starting position
         const color = from === 7 ? "w" : "b";
-        const promotionpiece = color === turn ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
+        const promotionpiece = (color !== turn || (color === 'b' && turn === 'b')) ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
         console.log(color);
         console.log(turn);
         var objectToSend = { color, from, to, flags: 'pc', piece, promotion: promotionpiece };
