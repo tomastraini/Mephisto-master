@@ -14,6 +14,14 @@ let lastBestMove = '';
 let lastResponseMove = '';
 let turn = '';
 
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('input[name="promotion"]').forEach((radio) => {
+        radio.addEventListener('click', () => {
+            localStorage.setItem('promotion_piece', radio.value);
+        });
+    });
+});
+
 async function fetchStockfishAPI(fen, fromWhere) {
     var callworstmove = false;
     var url = callworstmove ? 'http://127.0.0.1:5000/stockfish/worst' : 'http://127.0.0.1:5000/stockfish';
@@ -72,12 +80,9 @@ document.addEventListener('DOMContentLoaded', function () {
         compute_depth: JSON.parse(localStorage.getItem('compute_depth')) || 16,
         depth_or_time: JSON.parse(localStorage.getItem('depth_or_time')) || false,
         preferred_responses: JSON.parse(localStorage.getItem('preferred_responses')) || false,
-
         change_evaluation: JSON.parse(localStorage.getItem('change_evaluation')) || false,
         evaluation_color: JSON.parse(localStorage.getItem('evaluation_color')) || 3,
         evaluation_type: JSON.parse(localStorage.getItem('evaluation_type')) || 2,
-
-
         maximum_book_move: JSON.parse(localStorage.getItem('maximum_book_move')) || 8,
         bookmoves: JSON.parse(localStorage.getItem('bookmoves')) || false,
         play_elo: JSON.parse(localStorage.getItem('play_elo')) || 1200,
@@ -94,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
         coordinates: JSON.parse(localStorage.getItem('coordinates')) || false,
+        promotionPiece: localStorage.getItem('promotion_piece') ?? 'Q',
     };
     push_config();
 
@@ -123,7 +129,6 @@ document.addEventListener('DOMContentLoaded', function () {
             on_stockfish_response(response);
         })
         .catch(error => {
-            console.error('Error:', error);
             toggle_calculating(false);
         });
 
@@ -143,7 +148,6 @@ document.addEventListener('DOMContentLoaded', function () {
             dispatchClickEvent(response.x, response.y);
         }
         else if (response.cleanfen) {
-            console.log("HEYYY");
         }
     });
 
@@ -181,7 +185,6 @@ function new_pos(fen) {
             on_stockfish_response(response);
         })
         .catch(error => {
-            console.error('Error:', error);
             toggle_calculating(false);
         });
 
@@ -264,9 +267,13 @@ function makeMoveWithObject(lastMove) {
 
         const piece = "p";
         const flags = "n";
-        const promotions = lastMove[0].toLowerCase();
+        console.log(config.promotionPiece);
         const color = chess.turn();
+        const promotions = color === turn ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
+        console.log(color);
+        console.log(turn);
         var movementInfo = { from, to, promotion: promotions, piece, color, flags };
+        console.log(movementInfo);
         return movementInfo;
     } else {
         const [fromTo, promotion] = lastMove.split('=');
@@ -275,10 +282,12 @@ function makeMoveWithObject(lastMove) {
         const file = fromTo[1]; // Extract 'g' from 'Qgxh1='
         const calculateRank = to.includes("8") ? 7 : 2;
         const from = file + calculateRank;
-        const promotionpiece = fromTo[0].toLowerCase();
 
         const piece = "p"; // Retrieve the piece type from the starting position
         const color = from === 7 ? "w" : "b";
+        const promotionpiece = color === turn ? lastMove[0].toLowerCase() : config.promotionPiece.toLowerCase()
+        console.log(color);
+        console.log(turn);
         var objectToSend = { color, from, to, flags: 'pc', piece, promotion: promotionpiece };
 
         return objectToSend;
@@ -296,8 +305,7 @@ function on_stockfish_response(event) {
     let message = event.response;
     if (message.includes('bestmove')) {
         const arr = message.split(' ');
-        console.log(board.position())
-        const best = arr[1];
+        let best = arr[1];
         const threat = arr[3].replace(/\n/g, "");
         const toplay = (turn === 'w') ? 'White' : 'Black';
         const next = (turn === 'w') ? 'Black' : 'White';
@@ -305,14 +313,11 @@ function on_stockfish_response(event) {
         draw_arrow(threat, 'red', document.getElementById('response-arrow'));
         if (config.simon_says_mode) {
             const startSquare = best.substring(2, 4);
-            console.log(best)
-            console.log(startSquare)
             let startPiece = board.position()[startSquare];
             if (!startPiece) {
                 board.move(best)
             }
             startPiece = board.position()[startSquare];
-            console.log(startPiece)
             const startPieceType = (startPiece) ? startPiece.substring(1) : null;
             if (startPieceType) {
                 document.getElementById('chess_line_1').innerText = pieceNameMap[startPieceType];
@@ -335,8 +340,19 @@ function on_stockfish_response(event) {
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
             if (config.autoplay) {
+                // f2g1q
+                console.log("BEFORE", best)
+                const promotionPieces = ['q', 'k', 'r', 'b'];
+                const lastChar = best.slice(-1);
+                if (best.length === 5) {
+                    if (promotionPieces.includes(lastChar)) {
+                        best = best.slice(0, -1) + config.promotionPiece.toLowerCase();
+                    }
+                }
+                console.log("AFTER", best)
                 request_automove(best);
             }
+
         }
         toggle_calculating(false);
     } else if (message.includes('info depth')) {

@@ -44,6 +44,7 @@ chrome.runtime.onMessage.addListener(response => {
                     newGameButton.click();
                 }
             }
+            console.log(response.move);
             simulateMove(response.move).finally(toggleMoving);
         }
     } else if (response.pushConfig) {
@@ -60,34 +61,58 @@ function getMoves(getAllMoves) {
         if (moves && moves.length) {
             prefix = '***ccfen***';
             const selectedMove = getSelectedMoveRecord();
-            for (const move of moves) {
+            moves.forEach(move => {
                 const annotationElement = move.querySelector('.offset-for-annotation-icon');
                 if (annotationElement) {
                     const text = annotationElement.innerText;
-                    console.log(annotationElement);
                     if (text.includes('=')) {
-                        // Handle promotion case
-                        const [movePart, promotionPiece] = text.split('=')
-                        console.log(promotionPiece + movePart);
-                        res += promotionPiece + movePart + '=' + '*****';
+                        const [movePart, promotionPiece] = text.split('=');
+                        let completeMove = promotionPiece + movePart;
+                        if (completeMove.includes("+")) {
+                            const parts = completeMove.split("+");
+                            completeMove = parts[0] + parts[1] + "+"; 
+                        }
+                        res += completeMove + '=' + '*****';
                     } else {
                         // Regular case with icon-font-chess element
                         const iconElement = annotationElement.querySelector('.icon-font-chess');
                         if (iconElement) {
-                            console.log(iconElement);
-                            console.log(iconElement.getAttribute('data-figurine'));
                             res += (iconElement.getAttribute('data-figurine') ?? '') + move.innerText + '*****';
                         } else {
                             res += move.innerText + '*****';
                         }
                     }
                 } else {
+                    let annotationElement = move.querySelector('.node-highlight-content');
+
+                    console.log(annotationElement)
+                    if (annotationElement) {
+                        const text = annotationElement.innerText;
+                        if (text.includes('=')) {
+                            const [movePart, promotionPiece] = text.split('=');
+                            let completeMove = promotionPiece + movePart;
+                            if (completeMove.includes("+")) {
+                                const parts = completeMove.split("+");
+                                completeMove = parts[0] + parts[1] + "+"; 
+                            }
+                            res += completeMove + '=' + '*****';
+                        } else {
+                            // Regular case with icon-font-chess element
+                            const iconElement = annotationElement.querySelector('.icon-font-chess');
+                            if (iconElement) {
+                                res += (iconElement.getAttribute('data-figurine') ?? '') + move.innerText + '*****';
+                            } else {
+                                res += move.innerText + '*****';
+                            }
+                        }
+                        return
+                    }
                     res += move.innerText + '*****';
                 }
                 if (!getAllMoves && move === selectedMove) {
-                    break;
+                    return
                 }
-            }
+            })
         }
         else {
             prefix = '***ccpuz***';

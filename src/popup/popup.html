@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -14,29 +13,69 @@
     <script src="/lib/chessboard/chessboard.min.js"></script>
     <script src="/lib/materialize/materialize.min.js"></script>
     <script type="module" src="popup.js"></script>
+    <style>
+        .promotion-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .promotion-option {
+            display: inline-block;
+            margin: 0 10px;
+        }
+        .promotion-option input {
+            display: none;
+        }
+        .promotion-option label {
+            cursor: pointer;
+            display: block;
+            width: 50px;
+            height: 50px;
+            background-size: contain;
+        }
+        #queen-label { background-image: url('./res/Queen.png'); }
+        #knight-label { background-image: url('./res/Knight.png'); }
+        #bishop-label { background-image: url('./res/Bishop.png'); }
+        #rook-label { background-image: url('./res/Rook.png'); }
+    </style>
 </head>
-
-
 <body>
-<button id="config" class="waves-effect waves-light btn tooltipped" data-position="left" data-tooltip="Settings">
-    <i class="medium material-icons">settings</i>
-</button>
-<button id="analyze" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Analysis Board">
-    <i class="medium material-icons">open_in_new</i>
-</button>
+    <button id="config" class="waves-effect waves-light btn tooltipped" data-position="left" data-tooltip="Settings">
+        <i class="medium material-icons">settings</i>
+    </button>
+    <button id="analyze" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Analysis Board">
+        <i class="medium material-icons">open_in_new</i>
+    </button>
 
-<div id="move-arrow"></div>
-<div id="response-arrow"></div>
+    <div id="move-arrow"></div>
+    <div id="response-arrow"></div>
 
-<div id="game-detection">No Chess Game Detected</div>
+    <div id="game-detection">No Chess Game Detected</div>
 
-<div id="board"></div>
+    <div id="board"></div>
 
-<div id="moves">
-    <div id="chess_line_1">If your chess game is not detected<br>try reloading the page</div>
-    <div id="chess_line_2"></div>
-</div>
-<div id="evaluation"></div>
+    <div id="moves">
+        <div id="chess_line_1">If your chess game is not detected<br>try reloading the page</div>
+        <div id="chess_line_2"></div>
+    </div>
+    <div id="evaluation"></div>
+
+    <div class="promotion-container">
+        <div class="promotion-option">
+            <input type="radio" id="promote-queen" name="promotion" value="Q">
+            <label id="queen-label" for="promote-queen"></label>
+        </div>
+        <div class="promotion-option">
+            <input type="radio" id="promote-knight" name="promotion" value="N">
+            <label id="knight-label" for="promote-knight"></label>
+        </div>
+        <div class="promotion-option">
+            <input type="radio" id="promote-bishop" name="promotion" value="B">
+            <label id="bishop-label" for="promote-bishop"></label>
+        </div>
+        <div class="promotion-option">
+            <input type="radio" id="promote-rook" name="promotion" value="R">
+            <label id="rook-label" for="promote-rook"></label>
+        </div>
+    </div>
 </body>
-
 </html>
