@@ -24,6 +24,26 @@
         "ponder": "f6f2"
     },
     {
+        "opening": "E4E5-5",
+        "fen": "r1bqkbnr/pppp1p1p/2n3p1/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "bestmove": "h5f3",
+        "ponder": "g8f6"
+    },
+
+    {
+        "opening": "E4E5-1B",
+        "fen": "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2",
+        "bestmove": "b8c6",
+        "ponder": "f1c4"
+    },
+    {
+        "opening": "E4E5-2B",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        "bestmove": "e8e7",
+        "ponder": "h5f7"
+    },
+
+    {
         "opening": "Sicilian1",
         "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
         "bestmove": "f1c4",
@@ -53,7 +73,12 @@
         "bestmove": "a2a4",
         "ponder": "d7d5"
     },
-    
+    {
+        "opening": "Sicilian6",
+        "fen": "r1bq1bnr/pp1ppkpp/2n5/2p5/4P3/8/PPPP1PPP/RNBQK1NR w KQ - 0 4",
+        "bestmove": "d1h5",
+        "ponder": "g7g6"
+    },
     {
         "opening": "CaroKann1",
         "fen": "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
@@ -113,6 +138,30 @@
         "fen": "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2",
         "bestmove": "b2b4",
         "ponder": "c6b5"
+    },
+    {
+        "opening": "Nimzowich1",
+        "fen": "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2",
+        "bestmove": "b2b4",
+        "ponder": "c6b5"
+    },
+    {
+        "opening": "Fried liver black",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+        "bestmove": "g8f6",
+        "ponder": "f3g5"
+    },
+    {
+        "opening": "Fried liver black 2",
+        "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p1N1/2B1P3/8/PPPP1PPP/RNBQK2R b KQkq - 5 4",
+        "bestmove": "f6e4",
+        "ponder": "c4f7"
+    },
+    {
+        "opening": "Fried liver black 3",
+        "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+        "bestmove": "e7e5",
+        "ponder": "g1f3"
     }
 ]
 

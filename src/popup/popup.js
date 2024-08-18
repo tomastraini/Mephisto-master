@@ -10,8 +10,7 @@ let prog = 0;
 let lastFen = '';
 let lastPv = '';
 let lastScore = '';
-let lastBestMove = '';
-let lastResponseMove = '';
+let lastBestMove = {};
 let turn = '';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -95,7 +94,6 @@ document.addEventListener('DOMContentLoaded', function () {
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
-        // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
         coordinates: JSON.parse(localStorage.getItem('coordinates')) || false,
@@ -114,24 +112,22 @@ document.addEventListener('DOMContentLoaded', function () {
         showNotation: config.coordinates,
         draggable: false
     });
-    // new_pos("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-    // init fen LRU cache
     fenCache = new LRU(1000);
     var fen = fenCache.tail !== undefined && fenCache.tail !== null ? fenCache.tail : { value: "" }
 
     fetchStockfishAPI(`${fen}`, "info")
-        .then(response => {
-            on_stockfish_response(response);
-            return fetchStockfishAPI(`${fen}`, "bestmove");
-        })
-        .then(response => {
-            toggle_calculating(false);
-            on_stockfish_response(response);
-        })
-        .catch(error => {
-            toggle_calculating(false);
-        });
-
+    .then(response => {
+        on_stockfish_response(response);
+        return fetchStockfishAPI(`${fen}`, "bestmove");
+    })
+    .then(response => {
+        toggle_calculating(false);
+        on_stockfish_response(response);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toggle_calculating(false);
+    });
 
     chrome.runtime.onMessage.addListener(function (response) {
         if (response.fenresponse && response.dom !== 'no') {
@@ -148,6 +144,7 @@ document.addEventListener('DOMContentLoaded', function () {
             dispatchClickEvent(response.x, response.y);
         }
         else if (response.cleanfen) {
+            console.log("HEYYY");
         }
     });
 
@@ -174,30 +171,34 @@ function new_pos(fen) {
         <div>Calculating...<div>
         <progress id="progBar" value="2" max="100">
     `;
+    toggle_calculating(false);
     document.getElementById('chess_line_2').innerText = '';
+    console.log(fen);
+
     fetchStockfishAPI(`${fen}`, "info")
-        .then(response => {
-            on_stockfish_response(response);
-            return fetchStockfishAPI(`${fen}`, "bestmove");
-        })
-        .then(response => {
-            toggle_calculating(false);
-            on_stockfish_response(response);
-        })
-        .catch(error => {
-            toggle_calculating(false);
-        });
+    .then(response => {
+        on_stockfish_response(response);
+        return fetchStockfishAPI(`${fen}`, "bestmove");
+    })
+    .then(response => {
+        toggle_calculating(false);
+        on_stockfish_response(response);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toggle_calculating(false);
+    });
 
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
-        draw_arrow(lastBestMove, 'blue', document.getElementById('move-arrow'));
-        draw_arrow(lastResponseMove, 'red', document.getElementById('response-arrow'));
-        request_console_log(`Best Move: ${lastBestMove}`);
+        console.log(lastBestMove);
+        draw_arrow(lastBestMove.best, 'blue', document.getElementById('move-arrow'));
+        draw_arrow(lastBestMove.threat.slice(0, 4), 'red', document.getElementById('response-arrow'));
+        toggle_calculating(false);
     } else {
         clear_arrows();
     }
-    toggle_calculating(true);
 }
 
 function parse_fen_from_response(txt) {
@@ -227,13 +228,22 @@ function parse_fen_from_response(txt) {
         chess.setTurn(playerTurn);
         turn = chess.turn();
         return chess.fen();
-    } else {
-        const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
-        chess.load(fenPosition);
-        var move = lastMove.includes('=') ?
-            makeMoveWithObject(lastMove) : lastMove;
-        chess.move(move)
-
+    } else { // chess.com and lichess.org pages
+        if (indirectHit) { // calculate fen by appending newest move
+            const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
+            chess.load(fenPosition);
+            var move = lastMove.includes('=') ?
+                makeMoveWithObject(lastMove) : lastMove;
+            console.log(move);
+            chess.move(move)
+        } else {
+            const moves = txt.split("*****");
+            for (const move of moves) {
+                var movef = move.includes('=') ?
+                    makeMoveWithObject(move) : move;
+                chess.move(movef);
+            }
+        }
         turn = chess.turn();
         const fen = chess.fen();
 
@@ -305,12 +315,13 @@ function on_stockfish_response(event) {
     let message = event.response;
     if (message.includes('bestmove')) {
         const arr = message.split(' ');
-        let best = arr[1];
-        const threat = arr[3].replace(/\n/g, "");
+        const best = arr[1];
+        const threat = arr[3].toString().replace("/\n/g", "");
+        console.log("arr", arr);
+        console.log("threat", threat);
         const toplay = (turn === 'w') ? 'White' : 'Black';
         const next = (turn === 'w') ? 'Black' : 'White';
-        draw_arrow(best, 'blue', document.getElementById('move-arrow'));
-        draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+
         if (config.simon_says_mode) {
             const startSquare = best.substring(2, 4);
             let startPiece = board.position()[startSquare];
@@ -322,9 +333,10 @@ function on_stockfish_response(event) {
             if (startPieceType) {
                 document.getElementById('chess_line_1').innerText = pieceNameMap[startPieceType];
             }
-        } if (best === '(none)') {
+        }
+        if (best === '(none)') {
             document.getElementById('chess_line_1').innerText = `${next} Wins`;
-        } else if (threat && threat !== '(none)') {
+        } else if (threat) {
             document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
             document.getElementById('chess_line_2').innerText = `Best response for ${next} is ${threat}`;
         } else {
@@ -332,8 +344,7 @@ function on_stockfish_response(event) {
             document.getElementById('chess_line_2').innerText = '';
         }
         if (toplay.toLowerCase() === board.orientation()) {
-            lastBestMove = best;
-            lastResponseMove = threat;
+            lastBestMove = {best, threat};
             if (config.simon_says_mode) {
                 const startSquare = best.substring(0, 2);
                 const startPiece = board.position()[startSquare].substring(1);
@@ -355,30 +366,33 @@ function on_stockfish_response(event) {
 
         }
         toggle_calculating(false);
-    } else if (message.includes('info depth')) {
+    }
+    if (message.includes('info depth')) {
         const pvSplit = message.split(" pv ");
         const info = pvSplit[0];
+        if (info.includes('score')) {
+            const infoArr = info.split(" ");
+            const depth = infoArr[2];
+            const score = infoArr[9] * -1;
+            document.getElementById('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
+            lastScore = score / 100.0;
+            toggle_calculating(false);
+        }
         if (info.includes('score mate')) {
             const arr = message.split('score mate ');
             const mateArr = arr[1].split(' ');
             const mateNum = Math.abs(parseInt(mateArr[0]));
             if (mateNum === 0) {
                 document.getElementById('evaluation').innerText = 'Checkmate!';
-                document.getElementById('chess_line_2').innerText = '';
+                document.getElementById('chess_line_1').innerHTML ='<div>100%<div><progress id="progBar" max="100" value="100">100%</progress>';
             } else {
                 document.getElementById('evaluation').innerText = `Checkmate in ${mateNum}`;
             }
             toggle_calculating(false);
-        } else if (info.includes('score')) {
-            const infoArr = info.split(" ");
-            const depth = infoArr[2];
-            const score = infoArr[9] * -1;
-            document.getElementById('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
-            lastScore = score / 100.0;
         }
         lastPv = pvSplit[1];
     }
-    if (isCalculating) {
+    if (!isCalculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
         document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);

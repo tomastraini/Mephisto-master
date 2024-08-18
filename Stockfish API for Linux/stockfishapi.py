@@ -10,18 +10,20 @@ import json
 
 app = Flask(__name__)
 CORS(app)
-stockfish_path = '~/Descargas/Mephisto-master-main/Stockfish API for Linux/stockfishl'
-stockfish_dir = '~/Descargas/Mephisto-master-main/Stockfish API for Linux'
-stockfish_path = os.path.expanduser(stockfish_path)
-stockfish_dir = os.path.expanduser(stockfish_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+stockfish_path = os.path.join(current_dir, 'stockfish.exe')
 stockfish_process = subprocess.Popen([stockfish_path],
-                                     cwd=stockfish_dir,
+                                     cwd=current_dir,
                                      universal_newlines=True,
                                      stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL)
 
 stockfish_engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+
+###################################################################################
+###################################################################################
+###################################################################################
 
 def get_move_count_from_fen(fen):
     board = chess.Board(fen)
@@ -48,7 +50,7 @@ def get_book_move(fen, play_elo):
     return None
 
 def get_preferred_response(fen, response_type):
-    with open('preferred_responses.json', 'r') as json_file:
+    with open(os.path.join(current_dir,'preferred_responses.json'), 'r') as json_file:
         data = json.load(json_file)
         
     for preferred_response in data:
@@ -170,6 +172,10 @@ def get_human_move(board, stockfish):
     else:
         return random.choice(bestCaptures)
 
+###################################################################################
+###################################################################################
+###################################################################################
+
 @app.route('/stockfish', methods=['POST'])
 def handle_stockfish():
     global stockfish_process
@@ -248,6 +254,7 @@ def handle_stockfish():
     if response_type == 'bestmove':
         response = f'bestmove {best_move} ponder {ponder_move}'
     elif response_type == 'info':
+        print(response)
         response += f' pv {best_move}'
 
     return jsonify({'response': response})
