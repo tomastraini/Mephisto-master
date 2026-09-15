@@ -16,7 +16,7 @@ with a rename.
 |---|------|--------|------------------|------------|
 | 0 | [Audit](00-audit.md) | done | Findings with file:line — the evidence the rest of the plan is built on | — |
 | 1 | [Tooling & build](01-tooling.md) | **done** | `package.json`, TypeScript, bundler, lint, `dist/` output | — |
-| 2 | [Shared contracts](02-contracts.md) | todo | Typed messages, one config source of truth, structured board state | 1 |
+| 2 | [Shared contracts](02-contracts.md) | **done** | Typed messages, one config source of truth, structured board state | 1 |
 | 3 | [Site adapters](03-site-adapters.md) | todo | `SiteAdapter` per site; kills the 8 repeated if-chains | 2 |
 | 4 | [Popup decomposition](04-popup.md) | todo | `popup.js` split into engine client / parser / view / autoplay | 2 |
 | 5 | [Python backend](05-python-backend.md) | todo | One backend instead of two drifted copies; typed; engine access made safe | — |

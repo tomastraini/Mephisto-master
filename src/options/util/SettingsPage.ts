@@ -1,3 +1,4 @@
+import { type ConfigKey, DEFAULT_CONFIG } from '../../shared/config';
 import { byId } from '../../shared/dom';
 import { FormElement, type FormElementType, type FormValue } from './FormElement';
 
@@ -30,13 +31,13 @@ export abstract class SettingsPage {
         this.onConfigValuesChanged();
     }
 
-    protected registerFormElement(
-        name: string,
-        description: string,
-        type: FormElementType,
-        defaultValue: FormValue,
-    ): void {
-        const formElement = new FormElement(name, description, type, defaultValue);
+    /**
+     * `name` is a config key, so a typo is a compile error, and the default
+     * comes from DEFAULT_CONFIG rather than being written down a second time
+     * here -- which is how the two copies drifted apart.
+     */
+    protected registerFormElement(name: ConfigKey, description: string, type: FormElementType): void {
+        const formElement = new FormElement(name, description, type, DEFAULT_CONFIG[name]);
         formElement.registerChangeListener(() => this.onConfigValuesChanged());
         this.formElements.push(formElement);
     }

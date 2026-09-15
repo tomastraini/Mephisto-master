@@ -1,11 +1,18 @@
 import { Chess, type Color, type MoveSpec, type PieceSymbol } from '../../lib/chess.min.js';
-import type { EvaluationColor, EvaluationType, ExtensionConfig, PieceCode } from '../shared/config';
+import { type BoardState, SITE_NAMES } from '../shared/board-state';
+import { type ExtensionConfig, loadConfig, MIN_FEN_REFRESH_MS } from '../shared/config';
 import { byId, findById, query } from '../shared/dom';
-import type { ContentToPopupMessage, PopupToContentMessage } from '../shared/messages';
+import { type ContentToPopup, isMessage, type PopupToContent } from '../shared/messages';
+import { parseBestMove, parseInfo } from '../shared/uci';
 
 interface StockfishResponse {
     response: string;
     play_yes?: boolean;
+}
+
+/** What the backend sends when it turns a request away instead of answering it. */
+interface StockfishError {
+    error: string;
 }
 
 let board: ChessBoardInstance;
@@ -15,7 +22,7 @@ let config: ExtensionConfig;
 let isCalculating = false;
 let prog = 0;
 let lastFen = '';
-let lastPv = '';
+let lastPv: string[] = [];
 let lastScore: number | string = '';
 let lastBestMove = '';
 let lastResponseMove = '';
@@ -47,7 +54,19 @@ async function fetchStockfishAPI(fen: string, fromWhere: 'info' | 'bestmove'): P
         },
         body: JSON.stringify(objectToSend),
     });
-    return response.json() as Promise<StockfishResponse>;
+
+    // The backend rejects positions and search limits it can't use (a board read
+    // that dropped a piece, a missing compute time) rather than handing them to
+    // Stockfish, which used to exit on them. Report why instead of letting an
+    // absent `response` throw further down.
+    const body = (await response.json()) as StockfishResponse | StockfishError;
+    if (!response.ok || !('response' in body)) {
+        const reason = 'error' in body ? body.error : `HTTP ${response.status}`;
+        // eslint-disable-next-line no-console -- the backend refusing a request should not be silent
+        console.warn(`Mephisto: engine request rejected — ${reason}`);
+        return undefined;
+    }
+    return body;
 }
 
 const pieceNameMap: Record<string, string> = {
@@ -66,37 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // load extension configurations from localStorage
-    // TODO(phase-2): `|| default` swallows a legitimately stored 0 or false,
-    // and these defaults are a second copy of the ones in the options pages
-    // (which disagree on compute_time, preferred_responses and autoplay).
-    config = {
-        // general settings
-        compute_time: readSetting('compute_time', 200),
-        compute_depth: readSetting('compute_depth', 16),
-        depth_or_time: readSetting('depth_or_time', false),
-        preferred_responses: readSetting('preferred_responses', false),
-        change_evaluation: readSetting('change_evaluation', false),
-        evaluation_color: readSetting<EvaluationColor>('evaluation_color', 3),
-        evaluation_type: readSetting<EvaluationType>('evaluation_type', 2),
-        maximum_book_move: readSetting('maximum_book_move', 8),
-        bookmoves: readSetting('bookmoves', false),
-        play_elo: readSetting('play_elo', 1200),
-        fen_refresh: readSetting('fen_refresh', 20),
-        think_time: readSetting('think_time', 20),
-        think_variance: readSetting('think_variance', 20),
-        move_time: readSetting('move_time', 20),
-        move_variance: readSetting('move_variance', 20),
-        simon_says_mode: readSetting('simon_says_mode', false),
-        autoplay: readSetting('autoplay', false),
-        puzzle_mode: readSetting('puzzle_mode', false),
-        python_autoplay_backend: readSetting('python_autoplay_backend', false),
-        // appearance settings
-        pieces: readSetting('pieces', 'wikipedia.svg'),
-        board: readSetting('board', 'brown'),
-        coordinates: readSetting('coordinates', false),
-        promotionPiece: (localStorage.getItem('promotion_piece') as PieceCode | null) ?? 'Q',
-    };
+    config = loadConfig();
     push_config();
 
     // init chess board
@@ -123,27 +112,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
     void analysePosition(`${fen}`);
 
-    chrome.runtime.onMessage.addListener((response: ContentToPopupMessage) => {
-        if (response.fenresponse && response.dom !== 'no') {
-            if (response.orient && board.orientation() !== response.orient) {
-                board.orientation(response.orient);
+    chrome.runtime.onMessage.addListener((message: unknown) => {
+        if (!isMessage<ContentToPopup>(message)) return;
+        switch (message.kind) {
+            case 'board-state': {
+                if (!message.state) break;
+                if (board.orientation() !== message.orientation) {
+                    board.orientation(message.orientation);
+                }
+                const fen = toFen(message.state);
+                if (lastFen !== fen) {
+                    new_pos(fen);
+                }
+                break;
             }
-            const parsed = parse_fen_from_response(response.dom ?? '');
-            if (lastFen !== parsed) {
-                new_pos(parsed);
-            }
-        } else if (response.pullConfig) {
-            push_config();
-        } else if (response.click) {
-            void dispatchClickEvent(response.x ?? 0, response.y ?? 0);
+            case 'pull-config':
+                push_config();
+                break;
+            case 'simulate-click':
+                void dispatchClickEvent(message.x, message.y);
+                break;
         }
     });
 
-    // query fen periodically from content-script
+    // query the board periodically from the content-script
     request_fen();
-    setInterval(function () {
-        request_fen();
-    }, config.fen_refresh);
+    setInterval(request_fen, Math.max(config.fen_refresh, MIN_FEN_REFRESH_MS));
 
     // register button click listeners
     byId('analyze').addEventListener('click', () => {
@@ -156,19 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // initialize materialize
     M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
 });
-
-/**
- * Reads one stored setting, falling back to `fallback`.
- *
- * TODO(phase-2): the `||` is deliberate here only because it is what the
- * original did -- it means a stored 0 or false is discarded in favour of the
- * default. Phase 2 replaces this with `??`.
- */
-function readSetting<T>(key: string, fallback: T): T {
-    const stored = localStorage.getItem(key);
-    const parsed = stored !== null ? (JSON.parse(stored) as T) : null;
-    return parsed || fallback;
-}
 
 /** Asks the engine for an evaluation, then for the move it would play. */
 async function analysePosition(fen: string): Promise<void> {
@@ -202,48 +183,64 @@ function new_pos(fen: string): void {
     toggle_calculating(true);
 }
 
-function parse_fen_from_response(txt: string): string {
-    const prefixMap: Record<string, string> = {
-        li: 'Game detected on Lichess.org',
-        cc: 'Game detected on Chess.com',
-        bt: 'Game detected on BlitzTactics.com',
-    };
-    const metaTag = txt.substring(3, 8);
-    const prefix = metaTag.substring(0, 2);
-    byId('game-detection').innerText = prefixMap[prefix] ?? '';
-    txt = txt.substring(11);
-    const chess = new Chess();
-
-    const lastMoveRegex = /([\w-+=#]+[*]+)$/;
-    const cacheKey = txt.replace(lastMoveRegex, '');
-    fenCache.get(cacheKey); // refreshes the entry's position in the cache
-    const fenPosition = createFenFromMoves(cacheKey);
-
-    if (metaTag.includes('puz')) {
-        // chess.com & blitztactics.com puzzle pages
-        chess.clear(); // clear the board so we can place our pieces
-        const [playerTurn, ...pieces] = txt.split('*****').slice(0, -1);
-        for (const piece of pieces) {
-            const [color, type, square] = piece.split('-');
-            if (!color || !type || !square) continue;
-            chess.put({ type: type as PieceSymbol, color: color as Color }, square);
-        }
-        if (playerTurn) chess.setTurn(playerTurn);
-        turn = chess.turn();
-        return restoreCastlingRights(chess);
-    } else {
-        const lastMove = txt.match(lastMoveRegex)?.[0].split('*****')[0];
-        chess.load(fenPosition);
-        if (lastMove) {
-            chess.move(lastMove.includes('=') ? makeMoveWithObject(lastMove) : lastMove);
-        }
-
-        turn = chess.turn();
-        const fen = chess.fen();
-
-        fenCache.set(txt, fenPosition);
-        return fen;
+function toFen(state: BoardState): string {
+    byId('game-detection').innerText = SITE_NAMES[state.site];
+    switch (state.source) {
+        case 'piece-placement':
+            return fenFromPlacement(state);
+        case 'move-list':
+            return fenFromMoveList(state);
     }
+}
+
+/**
+ * Rebuilds a position that was read piece by piece.
+ *
+ * Used for puzzles, and for any site whose move list cannot be read.
+ */
+function fenFromPlacement(state: Extract<BoardState, { source: 'piece-placement' }>): string {
+    const chess = new Chess();
+    chess.clear(); // clear the board so we can place our pieces
+    for (const piece of state.pieces) {
+        chess.put({ type: piece.type, color: piece.color }, piece.square);
+    }
+    chess.setTurn(state.turn);
+    turn = chess.turn();
+    return restoreCastlingRights(chess);
+}
+
+/**
+ * Replays a move list into a position.
+ *
+ * All but the last move are replayed through a cache, since they do not change
+ * between polls; only the final move is applied fresh each time.
+ */
+function fenFromMoveList(state: Extract<BoardState, { source: 'move-list' }>): string {
+    const history = state.moves.slice(0, -1);
+    const lastMove = state.moves[state.moves.length - 1];
+    const cacheKey = history.join(' ');
+
+    let position = fenCache.get(cacheKey);
+    if (position === undefined) {
+        position = replayMoves(history);
+        fenCache.set(cacheKey, position);
+    }
+
+    const chess = new Chess();
+    chess.load(position);
+    if (lastMove) {
+        chess.move(lastMove.includes('=') ? makeMoveWithObject(lastMove) : lastMove);
+    }
+    turn = chess.turn();
+    return chess.fen();
+}
+
+function replayMoves(moves: string[]): string {
+    const chess = new Chess();
+    for (const move of moves) {
+        chess.move(move.includes('=') ? makeMoveWithObject(move) : move);
+    }
+    return chess.fen();
 }
 
 /**
@@ -288,13 +285,6 @@ function restoreCastlingRights(chess: Chess): string {
     return chess.validate_fen(fen).valid ? fen : chess.fen();
 }
 
-function createFenFromMoves(moves: string): string {
-    const chess = new Chess();
-    for (const move of moves.split('*****')) {
-        chess.move(move.includes('=') ? makeMoveWithObject(move) : move);
-    }
-    return chess.fen();
-}
 
 /**
  * Rebuilds a promotion as a move object.
@@ -322,7 +312,7 @@ function makeMoveWithObject(lastMove: string): MoveSpec {
     const promotion =
         color !== turn || (color === 'b' && turn === 'b')
             ? (lastMove[0] ?? '').toLowerCase()
-            : config.promotionPiece.toLowerCase();
+            : config.promotion_piece.toLowerCase();
 
     return {
         from,
@@ -334,6 +324,8 @@ function makeMoveWithObject(lastMove: string): MoveSpec {
     };
 }
 
+// -------------------------------------------------------------------------------------------
+
 function on_stockfish_response(event: StockfishResponse | undefined): void {
     if (event === undefined) {
         return;
@@ -342,11 +334,10 @@ function on_stockfish_response(event: StockfishResponse | undefined): void {
         request_automove('');
     }
     const message = event.response;
-    if (message.includes('bestmove')) {
-        const arr = message.split(' ');
-        let best = arr[1] ?? '';
-        // TODO(phase-4): parse this properly -- `ponder` is optional in UCI.
-        const threat = (arr[3] ?? '').replace(/\n/g, '');
+    const bestMove = parseBestMove(message);
+    if (bestMove) {
+        let best = bestMove.best;
+        const threat = bestMove.ponder ?? '';
         const toplay = turn === 'w' ? 'White' : 'Black';
         const next = turn === 'w' ? 'Black' : 'White';
         draw_arrow(best, 'blue', byId('move-arrow'));
@@ -386,17 +377,16 @@ function on_stockfish_response(event: StockfishResponse | undefined): void {
                 const promotionPieces = ['q', 'k', 'r', 'b'];
                 const lastChar = best.slice(-1);
                 if (best.length === 5 && promotionPieces.includes(lastChar)) {
-                    best = best.slice(0, -1) + config.promotionPiece.toLowerCase();
+                    best = best.slice(0, -1) + config.promotion_piece.toLowerCase();
                 }
                 request_automove(best);
             }
         }
         toggle_calculating(false);
     } else if (message.includes('info depth')) {
-        const pvSplit = message.split(' pv ');
-        const info = pvSplit[0] ?? '';
-        if (info.includes('score mate')) {
-            const mateNum = Math.abs(parseInt(message.split('score mate ')[1]?.split(' ')[0] ?? ''));
+        const info = parseInfo(message);
+        if (info.score?.kind === 'mate') {
+            const mateNum = Math.abs(info.score.moves);
             if (mateNum === 0) {
                 byId('evaluation').innerText = 'Checkmate!';
                 byId('chess_line_2').innerText = '';
@@ -404,16 +394,14 @@ function on_stockfish_response(event: StockfishResponse | undefined): void {
                 byId('evaluation').innerText = `Checkmate in ${mateNum}`;
             }
             toggle_calculating(false);
-        } else if (info.includes('score')) {
-            const infoArr = info.split(' ');
-            const depth = infoArr[2];
-            // TODO(phase-4): positional index into a UCI info line -- parse by
-            // token name instead, this breaks if a field is added or reordered.
-            const score = Number(infoArr[9]) * -1;
-            byId('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
-            lastScore = score / 100.0;
+        } else if (info.score?.kind === 'cp') {
+            // Reported relative to the side to move; the popup shows it from
+            // the other side, as it always has.
+            const score = (info.score.value * -1) / 100.0;
+            byId('evaluation').innerText = `Score: ${score} at depth ${info.depth ?? '?'}`;
+            lastScore = score;
         }
-        lastPv = pvSplit[1] ?? '';
+        lastPv = info.pv ?? [];
     }
     if (isCalculating) {
         prog++;
@@ -424,7 +412,7 @@ function on_stockfish_response(event: StockfishResponse | undefined): void {
 
 // -------------------------------------------------------------------------------------------
 
-function sendToContent(message: PopupToContentMessage): void {
+function sendToContent(message: PopupToContent): void {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tabId = tabs[0]?.id;
         if (tabId !== undefined) {
@@ -434,19 +422,21 @@ function sendToContent(message: PopupToContentMessage): void {
 }
 
 function request_fen(): void {
-    sendToContent({ queryfen: true });
+    sendToContent({ kind: 'query-board' });
 }
 
 function request_automove(move: string): void {
-    sendToContent(config.puzzle_mode ? { automove: true, pv: lastPv || move } : { automove: true, move: move });
+    // Puzzle mode walks the whole principal variation; otherwise just the move.
+    const pv = lastPv.length ? lastPv : [move];
+    sendToContent(config.puzzle_mode ? { kind: 'automove-pv', pv } : { kind: 'automove', move });
 }
 
 function request_console_log(message: string): void {
-    sendToContent({ consoleMessage: message });
+    sendToContent({ kind: 'console-log', message });
 }
 
 function push_config(): void {
-    sendToContent({ pushConfig: true, config: config });
+    sendToContent({ kind: 'push-config', config });
 }
 
 // -------------------------------------------------------------------------------------------

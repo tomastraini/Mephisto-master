@@ -1,9 +1,16 @@
+import {
+    type BoardState,
+    type Color,
+    type Orientation,
+    type PieceType,
+    type PlacedPiece,
+    type Site,
+    sanitizeMoveToken,
+    squareFromIndices,
+    toBoardIndex,
+} from '../shared/board-state';
 import type { ExtensionConfig } from '../shared/config';
-import type { ContentToPopupMessage, PopupToContentMessage } from '../shared/messages';
-
-type Site = 'lichess' | 'chesscom' | 'blitztactics';
-type Orientation = 'white' | 'black';
-type Color = 'w' | 'b';
+import { type ContentToPopup, isMessage, type PopupToContent } from '../shared/messages';
 
 let site: Site | undefined; // the site that the content-script was loaded on
 let config: ExtensionConfig | undefined; // configuration pulled from the popup
@@ -15,7 +22,7 @@ const siteMap: Record<string, Site> = {
     'blitztactics.com': 'blitztactics',
 };
 
-const pieceMap: Record<string, string> = {
+const pieceMap: Record<string, PieceType> = {
     pawn: 'p',
     rook: 'r',
     knight: 'n',
@@ -24,12 +31,12 @@ const pieceMap: Record<string, string> = {
     king: 'k',
 };
 
-const colorMap: Record<string, string> = {
+const colorMap: Record<string, Color> = {
     white: 'w',
     black: 'b',
 };
 
-/** Asserts a DOM lookup succeeded. Previously these sites threw a TypeError. */
+/** Asserts a DOM lookup succeeded. These sites previously threw a TypeError. */
 function required<T>(value: T | null | undefined, what: string): T {
     if (value === null || value === undefined) {
         throw new Error(`Expected ${what} on ${site ?? 'unknown site'}`);
@@ -42,42 +49,49 @@ window.onload = () => {
     pullConfig();
 };
 
-chrome.runtime.onMessage.addListener((response: PopupToContentMessage) => {
+chrome.runtime.onMessage.addListener((message: unknown) => {
+    if (!isMessage<PopupToContent>(message)) return;
     if (moving) return;
     tryAcceptRematch();
 
-    if (response.queryfen) {
-        // Reading the board is the only thing here that touches site markup, so
-        // it is the only thing that can fail. It used to run unconditionally at
-        // the top of this listener, which meant one bad read also stopped
-        // automove from running and stopped pushConfig from ever landing --
-        // leaving `config` undefined and every feature dead at once.
-        let dom = 'no';
-        let orient: Orientation = 'white';
-        try {
-            dom = getMoves(config?.simon_says_mode ?? true);
-            orient = getOrientation();
-        } catch (error) {
-            // eslint-disable-next-line no-console -- a silent board-read failure is what made this hard to diagnose
-            console.warn('Mephisto: could not read the board', error);
+    switch (message.kind) {
+        case 'query-board': {
+            // Reading the board is the only thing here that touches site
+            // markup, so it is the only thing that can fail. It used to run
+            // unconditionally before the dispatch below, which meant one bad
+            // read also stopped automove from running and stopped push-config
+            // from ever landing, leaving `config` undefined.
+            let state: BoardState | null = null;
+            let orientation: Orientation = 'white';
+            try {
+                state = readBoardState(config?.simon_says_mode ?? true);
+                orientation = getOrientation();
+            } catch (error) {
+                // eslint-disable-next-line no-console -- a silent board-read failure is what made this hard to diagnose
+                console.warn('Mephisto: could not read the board', error);
+            }
+            sendToPopup({ kind: 'board-state', state, orientation });
+            break;
         }
-        sendToPopup({ dom, orient, fenresponse: true });
-    } else if (response.automove) {
-        toggleMoving();
-        if (config?.puzzle_mode) {
-            void simulatePvMoves((response.pv ?? '').split(' ')).finally(toggleMoving);
-        } else {
-            void simulateMove(response.move ?? '').finally(toggleMoving);
-        }
-    } else if (response.pushConfig) {
-        config = response.config;
-    } else if (response.consoleMessage) {
-        // TODO(phase-2): the popup sends hand-and-brain hints here and nothing
-        // consumes them, so the feature is silently a no-op.
+        case 'automove':
+            toggleMoving();
+            void simulateMove(message.move).finally(toggleMoving);
+            break;
+        case 'automove-pv':
+            toggleMoving();
+            void simulatePvMoves(message.pv).finally(toggleMoving);
+            break;
+        case 'push-config':
+            config = message.config;
+            break;
+        case 'console-log':
+            // eslint-disable-next-line no-console -- this is the hand-and-brain hint channel
+            console.log(message.message);
+            break;
     }
 });
 
-function sendToPopup(message: ContentToPopupMessage): void {
+function sendToPopup(message: ContentToPopup): void {
     void chrome.runtime.sendMessage(message);
 }
 
@@ -100,110 +114,91 @@ function tryAcceptRematch(): void {
     });
 }
 
-function getMoves(getAllMoves: boolean): string {
-    let prefix = '';
-    let res = '';
+// -------------------------------------------------------------------------------------------
+
+/**
+ * Reads whatever the page is showing: a move list where one is available, the
+ * piece placement otherwise.
+ */
+function readBoardState(includeAllMoves: boolean): BoardState | null {
     if (site === 'chesscom') {
-        const moves = getMoveRecords();
-        if (moves && moves.length) {
-            prefix = '***ccfen***';
-            const selectedMove = getSelectedMoveRecord();
-            moves.forEach((move) => {
-                const annotationElement = move.querySelector<HTMLElement>('.offset-for-annotation-icon');
-                if (annotationElement) {
-                    const text = annotationElement.innerText;
-                    if (text.includes('=')) {
-                        res += formatPromotionMove(text) + '*****';
-                    } else {
-                        // Regular case with icon-font-chess element
-                        const iconElement = annotationElement.querySelector('.icon-font-chess');
-                        if (iconElement) {
-                            res += (iconElement.getAttribute('data-figurine') ?? '') + move.innerText + '*****';
-                        } else {
-                            res += move.innerText + '*****';
-                        }
-                    }
-                } else {
-                    const highlightElement = move.querySelector<HTMLElement>('.node-highlight-content');
-                    if (highlightElement) {
-                        const text = highlightElement.innerText;
-                        if (text.includes('=')) {
-                            res += formatPromotionMove(text) + '*****';
-                        } else {
-                            // Regular case with icon-font-chess element
-                            const iconElement = highlightElement.querySelector('.icon-font-chess');
-                            if (iconElement) {
-                                res += (iconElement.getAttribute('data-figurine') ?? '') + move.innerText + '*****';
-                            } else {
-                                res += move.innerText + '*****';
-                            }
-                        }
-                        return;
-                    }
-                    res += move.innerText + '*****';
-                }
-                if (!getAllMoves && move === selectedMove) {
-                    // TODO(phase-3): `return` only skips to the next entry -- it
-                    // does not stop the forEach. Hand-and-brain mode therefore
-                    // does not truncate at the selected move on chess.com, but
-                    // does on lichess, which uses a real `break` below.
-                    return;
-                }
-            });
-        } else {
-            prefix = '***ccpuz***';
-            res += getTurn() + '*****';
-            for (const piece of document.querySelectorAll<HTMLElement>('.piece')) {
-                let color: string | undefined;
-                let type: string | undefined;
-                let coordsStr: string | undefined;
-                if (document.querySelector('chess-board')) {
-                    let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
-                    if (!colorTypeClass || !coordsClass) continue;
-                    if (!coordsClass.includes('square')) {
-                        [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
-                    }
-                    [color, type] = colorTypeClass;
-                    coordsStr = coordsClass.split('-')[1];
-                } else {
-                    const background = piece.style.backgroundImage.match(/(\w+)\.png/);
-                    if (!background?.[1]) continue;
-                    [color, type] = background[1];
-                    coordsStr = piece.classList[1]?.split('-')[1]?.replaceAll('0', '');
-                }
-                if (!color || !type || !coordsStr?.[0] || !coordsStr[1]) continue;
-                const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
-                res += `${color}-${type}-${coords}*****`;
-            }
-        }
-    } else if (site === 'lichess') {
-        const moves = getMoveRecords();
-        if (moves && moves.length) {
-            prefix = '***lifen***';
-            const selectedMove = getSelectedMoveRecord();
-            for (const move of moves) {
-                res += move.innerText.replace(/\n.*/, '') + '*****';
-                if (!getAllMoves && move === selectedMove) {
-                    break;
-                }
-            }
-        } else {
-            prefix = '***lipuz***';
-            res += getTurn() + '*****';
-            res += readChessgroundPieces('.main-board piece');
-        }
-    } else if (site === 'blitztactics') {
-        prefix = '***btpuz***';
-        res += getTurn() + '*****';
-        res += readChessgroundPieces('.board-area piece');
+        const moves = readChesscomMoveList();
+        return moves.length
+            ? { source: 'move-list', site, moves }
+            : { source: 'piece-placement', site, turn: getTurn(), pieces: readChesscomPieces() };
     }
-    return res ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
+
+    if (site === 'lichess') {
+        const moves = readLichessMoveList(includeAllMoves);
+        return moves.length
+            ? { source: 'move-list', site, moves }
+            : {
+                  source: 'piece-placement',
+                  site,
+                  turn: getTurn(),
+                  pieces: readChessgroundPieces('.main-board piece'),
+              };
+    }
+
+    if (site === 'blitztactics') {
+        return {
+            source: 'piece-placement',
+            site,
+            turn: getTurn(),
+            pieces: readChessgroundPieces('.board-area piece'),
+        };
+    }
+
+    return null;
 }
 
 /**
- * chess.com writes a promotion as "g8=Q" but the parser in the popup expects
- * the piece first, with the "=" moved to the end: "Qg8=". A check marker has to
- * stay last, so "g8=Q+" becomes "Qg8+=".
+ * TODO(phase-3): unlike lichess, this does not stop at the selected move, so
+ * hand-and-brain mode reads the whole list on chess.com even when it should
+ * read only up to the move you are looking at. The original wrote `return`
+ * inside a forEach, which skips an element rather than breaking the loop, so
+ * the truncation has never actually worked. Fixing it is a behaviour change
+ * and belongs with the site adapters -- hence no `includeAllMoves` here.
+ */
+function readChesscomMoveList(): string[] {
+    const records = getMoveRecords();
+    if (!records.length) return [];
+
+    const moves: string[] = [];
+    for (const record of records) {
+        const annotation =
+            record.querySelector<HTMLElement>('.offset-for-annotation-icon') ??
+            record.querySelector<HTMLElement>('.node-highlight-content');
+
+        if (annotation && annotation.innerText.includes('=')) {
+            moves.push(sanitizeMoveToken(formatPromotionMove(annotation.innerText)));
+        } else {
+            // The piece letter lives in a data attribute on the figurine icon;
+            // the text node carries only the destination square.
+            const figurine = (annotation ?? record).querySelector('.icon-font-chess')?.getAttribute('data-figurine');
+            moves.push(sanitizeMoveToken((figurine ?? '') + record.innerText));
+        }
+    }
+    return moves;
+}
+
+function readLichessMoveList(includeAllMoves: boolean): string[] {
+    const records = getMoveRecords();
+    if (!records.length) return [];
+
+    const selectedMove = getSelectedMoveRecord();
+    const moves: string[] = [];
+    for (const record of records) {
+        moves.push(sanitizeMoveToken(record.innerText.replace(/\n.*/, '')));
+        if (!includeAllMoves && record === selectedMove) break;
+    }
+    return moves;
+}
+
+/**
+ * chess.com writes a promotion as "g8=Q" but the popup's parser expects the
+ * piece first with the "=" moved to the end: "Qg8=". A check marker has to stay
+ * last, so "g8=Q+" becomes "Qg8+=".
  */
 function formatPromotionMove(text: string): string {
     const [movePart = '', promotionPiece = ''] = text.split('=');
@@ -215,40 +210,87 @@ function formatPromotionMove(text: string): string {
     return completeMove + '=';
 }
 
+function readChesscomPieces(): PlacedPiece[] {
+    const pieces: PlacedPiece[] = [];
+    const usesWebComponent = !!document.querySelector('chess-board');
+
+    for (const element of document.querySelectorAll<HTMLElement>('.piece')) {
+        let colorType: string | undefined;
+        let coords: string | undefined;
+
+        if (usesWebComponent) {
+            let [colorTypeClass, coordsClass] = [element.classList[1], element.classList[2]];
+            if (!colorTypeClass || !coordsClass) continue;
+            // The two classes are not always in the same order.
+            if (!coordsClass.includes('square')) {
+                [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
+            }
+            colorType = colorTypeClass;
+            coords = coordsClass.split('-')[1];
+        } else {
+            colorType = element.style.backgroundImage.match(/(\w+)\.png/)?.[1];
+            coords = element.classList[1]?.split('-')[1]?.replaceAll('0', '');
+        }
+
+        const piece = toPlacedPiece(colorType, coords);
+        if (piece) pieces.push(piece);
+    }
+    return pieces;
+}
+
+const PIECE_TYPES = new Set<string>(['p', 'n', 'b', 'r', 'q', 'k']);
+
+/** chess.com encodes a piece as "wp" and a square as two 1-based digits, "52" = e2. */
+function toPlacedPiece(colorType: string | undefined, coords: string | undefined): PlacedPiece | null {
+    if (!colorType || !coords) return null;
+
+    const colorChar = colorType[0];
+    const typeChar = colorType[1];
+    if ((colorChar !== 'w' && colorChar !== 'b') || !typeChar || !PIECE_TYPES.has(typeChar)) return null;
+
+    const square = squareFromIndices(Number(coords[0]) - 1, Number(coords[1]) - 1);
+    return square ? { color: colorChar, type: typeChar as PieceType, square } : null;
+}
+
 /**
- * Reads piece positions off a chessground board, used by lichess and
- * blitztactics. Pieces are absolutely positioned, so the square has to be
- * recovered from the CSS transform.
+ * Reads piece positions off a chessground board (lichess and blitztactics).
+ * Pieces are absolutely positioned, so the square comes from the CSS transform.
  */
-function readChessgroundPieces(selector: string): string {
-    let res = '';
-    const pieces = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(
-        (piece) => !!piece.classList[1],
+function readChessgroundPieces(selector: string): PlacedPiece[] {
+    const pieces: PlacedPiece[] = [];
+    const orientation = getOrientation();
+    const elements = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(
+        (element) => !!element.classList[1],
     );
-    for (const piece of pieces) {
-        const transform = piece.style.transform;
-        const [x, y] = transform
+
+    for (const element of elements) {
+        const transform = element.style.transform;
+        const [rawX, rawY] = transform
             .substring(transform.indexOf('(') + 1, transform.length - 1)
             .replaceAll('px', '')
             .replace(' ', '')
             .split(',')
-            .map((num) => Number(num) / piece.getBoundingClientRect().width + 1);
-        if (x === undefined || y === undefined) continue;
+            .map((value) => Number(value) / element.getBoundingClientRect().width + 1);
+        if (rawX === undefined || rawY === undefined) continue;
 
-        const coords =
-            getOrientation() === 'black'
-                ? String.fromCharCode('h'.charCodeAt(0) - x + 1) + y
-                : String.fromCharCode('a'.charCodeAt(0) + x - 1) + (9 - y);
+        const x = toBoardIndex(rawX);
+        const y = toBoardIndex(rawY);
+        if (x === null || y === null) continue;
 
-        // A "ghost" is the piece being dragged; its real class list is shifted
-        // by one and it only counts while it is visible.
-        if (piece.classList[0] !== 'ghost') {
-            res += `${colorMap[piece.classList[0] ?? '']}-${pieceMap[piece.classList[1] ?? '']}-${coords}*****`;
-        } else if (piece.style.visibility === 'visible') {
-            res += `${colorMap[piece.classList[1] ?? '']}-${pieceMap[piece.classList[2] ?? '']}-${coords}*****`;
-        }
+        const square =
+            orientation === 'black' ? squareFromIndices(8 - x, y - 1) : squareFromIndices(x - 1, 8 - y);
+        if (!square) continue;
+
+        // A "ghost" is the piece being dragged; its classes are shifted by one
+        // and it only counts while it is visible.
+        const isGhost = element.classList[0] === 'ghost';
+        if (isGhost && element.style.visibility !== 'visible') continue;
+
+        const color = colorMap[element.classList[isGhost ? 1 : 0] ?? ''];
+        const type = pieceMap[element.classList[isGhost ? 2 : 1] ?? ''];
+        if (color && type) pieces.push({ color, type, square });
     }
-    return res;
+    return pieces;
 }
 
 function getOrientation(): Orientation {
@@ -268,7 +310,7 @@ function toggleMoving(): void {
 }
 
 function pullConfig(): void {
-    sendToPopup({ pullConfig: true });
+    sendToPopup({ kind: 'pull-config' });
 }
 
 // -------------------------------------------------------------------------------------------
@@ -362,8 +404,7 @@ function findPieceAt(selector: string, square: Element | undefined): HTMLElement
  * Falls back to White whenever there is nothing to reason from. The common case
  * is the start of a game -- no move has been played, so it is White's turn by
  * definition. This used to throw instead, which took the whole content script
- * down with it (see the listener above), and is why the extension appeared dead
- * until White had moved.
+ * down with it, and is why the extension appeared dead until White had moved.
  */
 function getTurn(): Color {
     const { to } = getLastMoveHighlights();
@@ -453,13 +494,9 @@ function getRandomSampledXY(bounds: DOMRect, range = 0.8): [number, number] {
 
 // -------------------------------------------------------------------------------------------
 
-function dispatchSimulateClick(x: number, y: number): void {
-    sendToPopup({ click: true, x: x, y: y });
-}
-
 function simulateClickSquare(bounds: DOMRect, range = 0.8): void {
     const [x, y] = getRandomSampledXY(bounds, range);
-    dispatchSimulateClick(x, y);
+    sendToPopup({ kind: 'simulate-click', x, y });
 }
 
 function simulateMove(move: string): Promise<void> {
@@ -471,9 +508,7 @@ function simulateMove(move: string): Promise<void> {
         const file = coords.charCodeAt(0);
         const rank = parseInt(coords.substring(1, 2));
         const [xIdx, yIdx] =
-            orientation === 'white'
-                ? [file - 'a'.charCodeAt(0), 8 - rank]
-                : ['h'.charCodeAt(0) - file, rank - 1];
+            orientation === 'white' ? [file - 'a'.charCodeAt(0), 8 - rank] : ['h'.charCodeAt(0) - file, rank - 1];
         return new DOMRect(
             boardBounds.x + xIdx * squareSide,
             boardBounds.y + yIdx * squareSide,
@@ -490,15 +525,11 @@ function simulateMove(move: string): Promise<void> {
         return (config?.move_time ?? 0) + Math.random() * (config?.move_variance ?? 0);
     }
 
-    async function performSimulatedMoveClicks(): Promise<void> {
+    async function performSimulatedMoveSequence(): Promise<void> {
+        await promiseTimeout(getThinkTime());
         simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)));
         await promiseTimeout(getMoveTime());
         simulateClickSquare(getBoundsFromCoords(move.substring(2)));
-    }
-
-    async function performSimulatedMoveSequence(): Promise<void> {
-        await promiseTimeout(getThinkTime());
-        await performSimulatedMoveClicks();
         if (move[4]) {
             await promiseTimeout(getMoveTime());
             simulatePromotionClicks(move[4]); // conditional promotion click

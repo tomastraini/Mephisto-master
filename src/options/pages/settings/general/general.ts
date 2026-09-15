@@ -63,27 +63,27 @@ function updateEvaluationColorLabel(): void {
 
 class GeneralSettings extends SettingsPage {
     protected init(): void {
-        this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
-        this.registerFormElement('compute_depth', 'Stockfish Depth:', 'input', 16);
-        this.registerFormElement('depth_or_time', 'Measure by depth or time:', 'checkbox', false);
-        this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 20);
-        this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
-        this.registerFormElement('preferred_responses', 'Preferred responses:', 'checkbox', true);
+        this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input');
+        this.registerFormElement('compute_depth', 'Stockfish Depth:', 'input');
+        this.registerFormElement('depth_or_time', 'Measure by depth or time:', 'checkbox');
+        this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input');
+        this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox');
+        this.registerFormElement('preferred_responses', 'Preferred responses:', 'checkbox');
 
-        this.registerFormElement('change_evaluation', 'Change evaluation process:', 'checkbox', false);
-        this.registerFormElement('evaluation_color', 'Select color:', 'select', 3);
-        this.registerFormElement('evaluation_type', 'Select type:', 'select', 2);
+        this.registerFormElement('change_evaluation', 'Change evaluation process:', 'checkbox');
+        this.registerFormElement('evaluation_color', 'Select color:', 'select');
+        this.registerFormElement('evaluation_type', 'Select type:', 'select');
 
-        this.registerFormElement('bookmoves', 'Activate book moves:', 'checkbox', false);
-        this.registerFormElement('maximum_book_move', 'Up to move:', 'input', 8);
-        this.registerFormElement('play_elo', 'Play like (ELO):', 'input', 1200);
-        this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', true);
-        this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
-        this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
-        this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 20);
-        this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 20);
-        this.registerFormElement('move_time', 'Simulated Move Time (ms):', 'input', 20);
-        this.registerFormElement('move_variance', 'Simulated Move Variance (ms):', 'input', 20);
+        this.registerFormElement('bookmoves', 'Activate book moves:', 'checkbox');
+        this.registerFormElement('maximum_book_move', 'Up to move:', 'input');
+        this.registerFormElement('play_elo', 'Play like (ELO):', 'input');
+        this.registerFormElement('autoplay', 'Autoplay:', 'checkbox');
+        this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox');
+        this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox');
+        this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input');
+        this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input');
+        this.registerFormElement('move_time', 'Simulated Move Time (ms):', 'input');
+        this.registerFormElement('move_variance', 'Simulated Move Variance (ms):', 'input');
     }
 }
 

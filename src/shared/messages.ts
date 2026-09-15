@@ -1,32 +1,38 @@
 // The messages exchanged between the popup and the content script.
 //
-// TODO(phase-2): these are still the original ad-hoc payloads, where the
-// receiver distinguishes a message by truthiness-testing a marker property.
-// Phase 2 replaces them with a discriminated union on a `kind` field, which
-// gives exhaustiveness checking at every handler. Typing them as-is here is
-// only so the two sides agree on the shape today.
+// Every message used to be an ad-hoc object literal that the receiver
+// identified by truthiness-testing a marker property, which meant a typo in a
+// property name was a message that silently did nothing, and two of the eight
+// shapes in flight had no sender or no handler at all.
+//
+// A discriminated union on `kind` makes `switch (message.kind)` exhaustive:
+// adding a variant becomes a compile error at every handler that does not
+// cover it.
 
+import type { BoardState, Orientation } from './board-state';
 import type { ExtensionConfig } from './config';
 
-export interface PopupToContentMessage {
-    queryfen?: boolean;
-    automove?: boolean;
-    /** Set when automove is a single move (UCI, e.g. "e2e4" or "e7e8q"). */
-    move?: string;
-    /** Set when automove should walk a principal variation, space separated. */
-    pv?: string;
-    pushConfig?: boolean;
-    config?: ExtensionConfig;
-    consoleMessage?: string;
-}
+export type PopupToContent =
+    | { kind: 'query-board' }
+    /** Play a single move, in UCI ("e2e4", "e7e8q"). */
+    | { kind: 'automove'; move: string }
+    /** Walk a principal variation, playing our moves and waiting for theirs. */
+    | { kind: 'automove-pv'; pv: string[] }
+    | { kind: 'push-config'; config: ExtensionConfig }
+    | { kind: 'console-log'; message: string };
 
-export interface ContentToPopupMessage {
-    /** The encoded board state, or 'no' when nothing was detected. */
-    dom?: string;
-    orient?: 'white' | 'black';
-    fenresponse?: boolean;
-    pullConfig?: boolean;
-    click?: boolean;
-    x?: number;
-    y?: number;
+export type ContentToPopup =
+    /** `state` is null when nothing recognisable was on the page. */
+    | { kind: 'board-state'; state: BoardState | null; orientation: Orientation }
+    | { kind: 'pull-config' }
+    | { kind: 'simulate-click'; x: number; y: number };
+
+export type Message = PopupToContent | ContentToPopup;
+
+/**
+ * Guards against anything else sharing the runtime message channel -- other
+ * extensions, page scripts, or an older build of this one left in another tab.
+ */
+export function isMessage<T extends Message>(value: unknown): value is T {
+    return typeof value === 'object' && value !== null && typeof (value as { kind?: unknown }).kind === 'string';
 }

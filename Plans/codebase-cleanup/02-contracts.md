@@ -1,5 +1,50 @@
 # Phase 2 — Shared contracts
 
+## Status: done
+
+Shipped. `src/shared/` now holds `board-state.ts`, `config.ts`, `messages.ts`
+and `uci.ts`, imported by both the popup and the content script. Notes on what
+differs from the plan below:
+
+- **The `*****` protocol is gone.** No `'***'` or `'*****'` literal remains in
+  `src/`. One piece of it was load-bearing and was kept: the old
+  `res.replace(/[^\w-+=#*]/g, '')` scrub over the whole payload also stripped
+  chess.com's figurine glyphs out of move text, without which a move reads
+  `"N♘f3"`. That is now `sanitizeMoveToken`, applied per move.
+- **`PiecePlacementState` keeps its `turn` field.** The board-reading plan's
+  amendment (drop `turn`, add `lastMove`) is correct *for the position tracker*,
+  which derives turn from its own history. Nothing derives it yet, so removing
+  it now would just break the piece-scan path. Left as an amendment for
+  whenever that plan is picked up.
+- **Config keys stay snake_case.** The plan's sketch used camelCase, but these
+  keys are also the localStorage keys and the Python backend's JSON field names
+  — renaming them would silently discard every existing user's settings.
+  `promotion_piece` was folded in from its bespoke localStorage access.
+- **Defaults resolved to the options-page values**, including `autoplay: true`,
+  per the decision taken when this phase started.
+- **`loadConfig` uses `??` and a runtime type check** against the default's
+  type, which is as much as a JSON blob from localStorage can be trusted for. A
+  stored `0` or `false` now survives. `MIN_FEN_REFRESH_MS` clamps the poll
+  interval, because `??` makes a stored `fen_refresh` of 0 reachable and
+  `setInterval(fn, 0)` is a request to spin.
+- **The fen cache now actually caches.** It previously looked up one key,
+  discarded the result, recomputed the position unconditionally, and stored it
+  under a *different* key — so it never hit once. It now keys on the move
+  history, so a SAN replay happens per new position rather than per poll.
+- **`console-log` was implemented** rather than deleted; it is the
+  hand-and-brain hint channel and had a sender but an empty handler.
+- **Two extras** beyond the plan, both in `board-state.ts`: `Square` is a
+  template-literal type with `squareFromIndices` validating its inputs, and
+  `toBoardIndex` snaps pixel-derived indices to a square within a tolerance.
+  Together they drop pieces caught mid-animation instead of computing a garbage
+  file letter for them, and stop floating-point error truncating a piece one
+  file to the left.
+
+Verified `parseInfo` against real Stockfish lines: the old `infoArr[9]` reads
+the **node count as the score** whenever the engine omits `multipv`.
+
+---
+
 **Goal:** create `src/shared/` and move the three things that are currently
 re-derived by hand on both sides of a boundary into one typed definition each:
 the message protocol, the config, and the board state.

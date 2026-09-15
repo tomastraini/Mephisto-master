@@ -4,7 +4,7 @@ Design and refactor plans for this repo. One subfolder per effort.
 
 | Plan | Status | About |
 |---|---|---|
-| [codebase-cleanup](codebase-cleanup/) | Phase 1 of 6 done | TypeScript migration, typed contracts, site adapters, popup split, Python backend merge |
+| [codebase-cleanup](codebase-cleanup/) | Phases 1-2 of 6 done | TypeScript migration, typed contracts, site adapters, popup split, Python backend merge |
 
 ## Conventions
 
