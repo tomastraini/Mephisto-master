@@ -1,5 +1,56 @@
 # Phase 1 — Tooling & build
 
+## Status: done
+
+Shipped. `npm run build`, `npm run typecheck` and `npm run lint` are all green,
+and `dist/` loads as an unpacked extension. What landed, and where it differs
+from the plan below:
+
+- **`tsconfig.json` is fully strict**, including `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`, `noUnusedLocals`, `verbatimModuleSyntax` and
+  `isolatedModules`. Nothing needed to be relaxed.
+- **esbuild, two builds.** An ESM build with code splitting for the popup,
+  service worker and options page; a separate IIFE build for the content script,
+  which cannot be a module. Output mirrors the source tree, so `manifest.json`
+  and the HTML files kept their existing paths.
+- **`require.js` is gone.** Its JavaScript half is replaced by
+  `src/options/framework/pages.ts` — a statically listed map of dynamic imports,
+  so the bundler can see and split every page while module bodies still execute
+  after their markup is injected. Its CSS/HTML half moved to
+  `framework/assets.ts`. This also removes the racy `moduleMap.latest` handshake.
+- **`background-script.ts` was emptied, not ported.** Its only code path called
+  an undefined `loadStockfishModule()` and would have thrown a ReferenceError;
+  there was no behaviour to preserve, and it could not compile. The worker file
+  is kept because the manifest declares it, with a TODO for Phase 2 to decide
+  whether it should exist at all.
+- **`src/shared/config.ts` and `src/shared/messages.ts` were added early**,
+  carrying the *shapes* only. Typing the code at all required a name for the
+  config and message objects. Phase 2 still owns unifying the *values* and
+  switching `||` to `??`; both files carry TODOs saying so.
+- **Type declarations**: `lib/chess.min.d.ts` sits next to the file it
+  describes, so TypeScript finds it through normal resolution;
+  `src/types/globals.d.ts` covers the `<script>`-tag globals `LRU`,
+  `ChessBoard` and `M`.
+- **`src/shared/dom.ts`** provides `byId`/`query`/`queryAll`. Strict mode would
+  otherwise need a null check at roughly ninety call sites. `byId` throws on a
+  missing id, which is what the old code already did — just with a message.
+- **Two behavioural changes, both forced by the compiler**, both no-ops at
+  runtime: `simulatePvMoves` called `simulateMove(move, false)` on a
+  single-parameter function, so the ignored argument was dropped; and
+  `simulatePromotionClicks` was `async` with nothing to await, so it became
+  synchronous and its caller stopped awaiting it. Nothing else changed.
+- **Extras not in the plan**: a `.gitattributes` to stop the CRLF churn that was
+  reporting 62 unmodified files as modified, and `dist/`/`node_modules/` added
+  to `.gitignore`.
+
+Everything the audit flagged but this phase did not fix is marked in the source
+with a `TODO(phase-N)` comment naming the phase that owns it. Two of the lint
+findings are suppressed inline with an explanation rather than fixed, because
+fixing them would change behaviour: the `[object Object]` startup path in
+`popup.ts` (Phase 4) and the `||` config defaults (Phase 2).
+
+---
+
 **Goal:** get a TypeScript compiler and a bundler in front of the extension
 without changing a single line of logic. At the end of this phase the extension
 still behaves identically, but it is built from `src/` into `dist/` and the

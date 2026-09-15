@@ -1,0 +1,10 @@
+# Normalise line endings so a checkout on Windows does not report every file
+# in the tree as modified.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+
+*.exe binary
+*.png binary
+*.jpg binary
+*.ico binary

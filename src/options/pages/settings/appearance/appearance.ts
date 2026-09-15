@@ -1,16 +1,14 @@
-import { define } from "../../../framework/require.js";
-import { SettingsPage } from "../../../util/SettingsPage.js";
+import { queryAll } from '../../../../shared/dom';
+import { SettingsPage } from '../../../util/SettingsPage';
 
 class AppearanceSettings extends SettingsPage {
-    init() {
-        M.FormSelect.init(document.querySelectorAll('select'), {});
+    protected init(): void {
+        M.FormSelect.init(queryAll('select'), {});
         this.registerFormElement('pieces', 'Pieces:', 'select', 'wikipedia.svg');
         this.registerFormElement('board', 'Board:', 'select', 'brown');
         this.registerFormElement('coordinates', 'Coordinates:', 'checkbox', false);
     }
 }
 
-define({
-    title: 'Appearance',
-    page: new AppearanceSettings()
-});
+export const title = 'Appearance';
+export const page = new AppearanceSettings();

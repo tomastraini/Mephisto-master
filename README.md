@@ -25,18 +25,31 @@ For more information, see [Getting Started](https://github.com/AlexPetrusca/Meph
 
 
 ## How to Develop Locally
+The extension is written in TypeScript and built with esbuild, so it has to be
+compiled before Chrome can load it. **Load `dist/`, not the repo root.**
+
 Set up a local install:
 1. Clone the repo
-2. Navigate to `chrome://extensions` through the Chrome address bar
-3. Enable developer mode
-4. Click on "Load unpacked" and select the cloned repo folder
-5. Mephisto Chess Extension is now installed
+2. Run `npm install`
+3. Run `npm run build` to produce `dist/`
+4. Navigate to `chrome://extensions` through the Chrome address bar
+5. Enable developer mode
+6. Click on "Load unpacked" and select the `dist` folder
+7. Mephisto Chess Extension is now installed
 
 Test a code change:
-1. Navigate to `chrome://extensions`
-2. Reload Mephisto Chess Extension
-3. Reload the webpage you want to test on
-4. Test the changes
+1. Run `npm run watch` to rebuild on save (or `npm run build` once)
+2. Navigate to `chrome://extensions`
+3. Reload Mephisto Chess Extension
+4. Reload the webpage you want to test on
+5. Test the changes
+
+Other scripts:
+- `npm run typecheck` — run the TypeScript compiler with no output
+- `npm run lint` — run ESLint
+- `npm run check` — both of the above
+
+Planned cleanup work is tracked in [`Plans/`](Plans/).
 
 For technical details, see [Technical Overview](https://github.com/AlexPetrusca/Mephisto/wiki/Technical-Overview).
 
