@@ -44,21 +44,24 @@ window.onload = () => {
 
 chrome.runtime.onMessage.addListener((response: PopupToContentMessage) => {
     if (moving) return;
-    const res = getMoves(config?.simon_says_mode ?? true);
-    if (document.querySelector('.game-over-modal-content') && document.querySelector('.game-review-buttons-review')) {
-        const buttonsContainer = document.querySelector('.game-over-buttons-component');
-        if (buttonsContainer) {
-            buttonsContainer.querySelectorAll('button').forEach((button) => {
-                const label = button.querySelector('span');
-                if (label && label.innerText === 'New 5 min') {
-                    button.click();
-                }
-            });
-        }
-    }
+    tryAcceptRematch();
+
     if (response.queryfen) {
-        const orient = getOrientation();
-        sendToPopup({ dom: res, orient: orient, fenresponse: true });
+        // Reading the board is the only thing here that touches site markup, so
+        // it is the only thing that can fail. It used to run unconditionally at
+        // the top of this listener, which meant one bad read also stopped
+        // automove from running and stopped pushConfig from ever landing --
+        // leaving `config` undefined and every feature dead at once.
+        let dom = 'no';
+        let orient: Orientation = 'white';
+        try {
+            dom = getMoves(config?.simon_says_mode ?? true);
+            orient = getOrientation();
+        } catch (error) {
+            // eslint-disable-next-line no-console -- a silent board-read failure is what made this hard to diagnose
+            console.warn('Mephisto: could not read the board', error);
+        }
+        sendToPopup({ dom, orient, fenresponse: true });
     } else if (response.automove) {
         toggleMoving();
         if (config?.puzzle_mode) {
@@ -76,6 +79,25 @@ chrome.runtime.onMessage.addListener((response: PopupToContentMessage) => {
 
 function sendToPopup(message: ContentToPopupMessage): void {
     void chrome.runtime.sendMessage(message);
+}
+
+/**
+ * chess.com only: click through the game-over dialog into another game.
+ *
+ * TODO(phase-3): this is chess.com-specific but lives in site-agnostic code,
+ * the button is matched on the literal text "New 5 min" so it only works for
+ * one time control, and there is no setting to turn it off.
+ */
+function tryAcceptRematch(): void {
+    if (!document.querySelector('.game-over-modal-content') || !document.querySelector('.game-review-buttons-review')) {
+        return;
+    }
+    const buttonsContainer = document.querySelector('.game-over-buttons-component');
+    buttonsContainer?.querySelectorAll('button').forEach((button) => {
+        if (button.querySelector('span')?.innerText === 'New 5 min') {
+            button.click();
+        }
+    });
 }
 
 function getMoves(getAllMoves: boolean): string {
@@ -288,7 +310,17 @@ function getMoveRecords(): HTMLElement[] {
     return [];
 }
 
-function getLastMoveHighlights(): [Element | undefined, Element | undefined] {
+/**
+ * The two highlighted squares of the last move, or undefined squares when no
+ * move has been played yet.
+ *
+ * Returned as a named pair rather than a tuple on purpose: this used to return
+ * `[toSquare, fromSquare]` while two of its three callers destructured it as
+ * `[from, to]`, so `getTurn()` looked for a piece on the square the move had
+ * just vacated, found nothing, and threw. Naming the fields makes that class of
+ * mistake impossible.
+ */
+function getLastMoveHighlights(): { from: Element | undefined; to: Element | undefined } {
     let fromSquare: Element | undefined;
     let toSquare: Element | undefined;
     if (site === 'chesscom') {
@@ -301,18 +333,17 @@ function getLastMoveHighlights(): [Element | undefined, Element | undefined] {
         }
         [fromSquare, toSquare] = Array.from(highlights);
     } else if (site === 'lichess') {
+        // `.last-move` comes back in document order, not move order, so work
+        // out which square is the destination by seeing which still has a piece.
         [toSquare, fromSquare] = Array.from(document.querySelectorAll('.last-move'));
-        const toPiece = findPieceAt('.main-board piece', toSquare);
-        if (!toPiece) {
+        if (toSquare && fromSquare && !findPieceAt('.main-board piece', toSquare)) {
             [toSquare, fromSquare] = [fromSquare, toSquare];
         }
     } else if (site === 'blitztactics') {
-        [fromSquare, toSquare] = [
-            document.querySelector('.move-from') ?? undefined,
-            document.querySelector('.move-to') ?? undefined,
-        ];
+        fromSquare = document.querySelector('.move-from') ?? undefined;
+        toSquare = document.querySelector('.move-to') ?? undefined;
     }
-    return [toSquare, fromSquare];
+    return { from: fromSquare, to: toSquare };
 }
 
 /** Finds the chessground piece sitting on the same square as `square`. */
@@ -324,24 +355,33 @@ function findPieceAt(selector: string, square: Element | undefined): HTMLElement
         .find((piece) => piece.style.transform === transform);
 }
 
+/**
+ * Whose move it is, worked out from the colour of the piece that made the last
+ * move.
+ *
+ * Falls back to White whenever there is nothing to reason from. The common case
+ * is the start of a game -- no move has been played, so it is White's turn by
+ * definition. This used to throw instead, which took the whole content script
+ * down with it (see the listener above), and is why the extension appeared dead
+ * until White had moved.
+ */
 function getTurn(): Color {
-    const [, toSquare] = getLastMoveHighlights();
+    const { to } = getLastMoveHighlights();
+    if (!to) return 'w';
+
     if (site === 'chesscom') {
-        const square = required(toSquare, 'a highlighted destination square');
-        const hlPiece = required(
-            document.querySelector<HTMLElement>(`.piece.${square.classList[1]}`),
-            'a piece on the destination square',
-        );
+        const hlPiece = document.querySelector<HTMLElement>(`.piece.${to.classList[1]}`);
+        if (!hlPiece) return 'w';
         const hlColorType = document.querySelector('chess-board')
             ? Array.from(hlPiece.classList).find((c) => c.match(/[wb][prnbkq]/))
             : hlPiece.style.backgroundImage.match(/(\w+)\.png/)?.[1];
         return hlColorType?.[0] === 'w' ? 'b' : 'w';
-    } else if (site === 'lichess' || site === 'blitztactics') {
-        const selector = site === 'lichess' ? '.main-board piece' : '.board-area piece';
-        const toPiece = required(findPieceAt(selector, toSquare), 'a piece on the destination square');
-        return toPiece.classList.contains('white') ? 'b' : 'w';
     }
-    throw new Error('Cannot determine the side to move: unrecognised site');
+
+    const selector = site === 'lichess' ? '.main-board piece' : '.board-area piece';
+    const toPiece = findPieceAt(selector, to);
+    if (!toPiece) return 'w';
+    return toPiece.classList.contains('white') ? 'b' : 'w';
 }
 
 function getBoard(): Element | null {
@@ -482,8 +522,8 @@ function simulatePvMoves(pv: string[]): Promise<void> {
                 : String.fromCharCode('h'.charCodeAt(0) - xIdx) + (yIdx + 1);
         }
 
-        const [fromSquare, toSquare] = getLastMoveHighlights();
-        return deriveCoords(fromSquare) + deriveCoords(toSquare);
+        const { from, to } = getLastMoveHighlights();
+        return deriveCoords(from) + deriveCoords(to);
     }
 
     /** Waits for the board to change, then reports whether it changed as predicted. */

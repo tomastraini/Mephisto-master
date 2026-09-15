@@ -230,7 +230,7 @@ function parse_fen_from_response(txt: string): string {
         }
         if (playerTurn) chess.setTurn(playerTurn);
         turn = chess.turn();
-        return chess.fen();
+        return restoreCastlingRights(chess);
     } else {
         const lastMove = txt.match(lastMoveRegex)?.[0].split('*****')[0];
         chess.load(fenPosition);
@@ -244,6 +244,48 @@ function parse_fen_from_response(txt: string): string {
         fenCache.set(txt, fenPosition);
         return fen;
     }
+}
+
+/**
+ * Puts castling rights back into a position that was rebuilt piece by piece.
+ *
+ * `chess.clear()` zeroes the rights and `put()` never restores them, so every
+ * position reconstructed from a piece scan -- which is all of lichess, all
+ * puzzles and all of blitztactics -- reached Stockfish with castling forbidden
+ * and got a correspondingly wrong best move back.
+ *
+ * Rights cannot be read off placement, so infer them: a king and its rook still
+ * on their home squares almost certainly means the right survives. That is
+ * wrong only when a king or rook moved away and came back, which is rare and
+ * still strictly better than forbidding castling outright.
+ *
+ * This also makes preferred_responses reachable on those sites for the first
+ * time -- every entry in preferred_responses.json carries KQkq, so a `-` FEN
+ * could never match one.
+ *
+ * En passant is deliberately not attempted: it cannot be derived from placement
+ * alone, it needs the previous position.
+ */
+function restoreCastlingRights(chess: Chess): string {
+    const at = (square: string, color: Color, type: PieceSymbol): boolean => {
+        const piece = chess.get(square);
+        return piece !== null && piece.color === color && piece.type === type;
+    };
+
+    let rights = '';
+    if (at('e1', 'w', 'k')) {
+        if (at('h1', 'w', 'r')) rights += 'K';
+        if (at('a1', 'w', 'r')) rights += 'Q';
+    }
+    if (at('e8', 'b', 'k')) {
+        if (at('h8', 'b', 'r')) rights += 'k';
+        if (at('a8', 'b', 'r')) rights += 'q';
+    }
+
+    const fields = chess.fen().split(' ');
+    fields[2] = rights || '-';
+    const fen = fields.join(' ');
+    return chess.validate_fen(fen).valid ? fen : chess.fen();
 }
 
 function createFenFromMoves(moves: string): string {

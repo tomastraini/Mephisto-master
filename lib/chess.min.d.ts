@@ -31,11 +31,19 @@ export interface Move extends MoveSpec {
     san: string;
 }
 
+export interface FenValidation {
+    valid: boolean;
+    error_number: number;
+    error: string;
+}
+
 export declare class Chess {
     constructor(fen?: string);
     load(fen: string): boolean;
     clear(): void;
     put(piece: Piece, square: string): boolean;
+    get(square: string): Piece | null;
+    validate_fen(fen: string): FenValidation;
     setTurn(color: string): void;
     turn(): Color;
     move(move: string | MoveSpec): Move | null;
