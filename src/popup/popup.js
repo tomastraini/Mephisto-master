@@ -300,7 +300,7 @@ function on_stockfish_response(event) {
         return;
     }
     if (event.play_yes == true) {
-        request_automove("e2e4")
+        request_automove("")
     }
     let message = event.response;
     if (message.includes('bestmove')) {
